@@ -1,0 +1,9 @@
+<ul class="blog_list">
+    $for(posts)$
+    	<li>
+	    	$partial("templates/post.html")$
+	    	<a class="disqus_link" href="$url$#disqus_thread"></a>
+    	</li>
+    $endfor$
+</ul>
+<p style="text-align:right; font-weight:bold">Looking for an older post? <a href="archive.html">Check out the archive</a>.</p>

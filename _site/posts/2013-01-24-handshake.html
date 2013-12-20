@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" style="position:relative;">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Abstract Nonsense - Graph Theory and The Handshake Problem</title>
+        <link rel="stylesheet" type="text/css" href="../css/default.css" />
+        <link rel="stylesheet" type="text/css" href="../css/syntax.css" />
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.4.3/jquery.min.js"></script>
+        <script src="../js/Utils.js"></script>
+        <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+        </script>
+        <link href="http://fonts.googleapis.com/css?family=Alegreya+Sans+SC|Della+Respira|Montaga" rel="stylesheet" type="text/css">
+    </head>
+    <body id="main">
+        <div id="header">
+            <div id="logo">
+                <a href="../" id="main_title">Abstract Nonsense</a>
+                <p id="main_subtitle"><br /><a href="../">By Benjamin Kovach</a></p>
+            </div>
+            <div id="navigation">
+                <a href="../">Home</a>
+                <a href="../contact.html">Contact</a>
+                <a href="../cv.html">CV</a>
+                <a href="../archive.html">Archive</a>
+            </div>
+        </div>
+        <div id="content">
+            <center><h1 class="title"><a href="#">Graph Theory and The Handshake Problem</a></h1>
+                
+                    <h3 class="subtitle">Published by Ben Kovach on January 24, 2013</h3>
+                
+                
+                    <h3 class="subtitle">Tags: </h3>
+                
+                    </center>
+            <div id="main_body">
+                <div class="post_body">
+	<h4 id="the-handshake-problem">The Handshake Problem</h4>
+<p>The Handshake Problem is something of a classic in mathematics. I first heard about it in an algebra course I took in high school, and it’s stuck with me through the years. The question is this:</p>
+<blockquote>
+<p>In a room containing <span class="math">\(n\)</span> people, how many handshakes must take place for everyone to have shaken hands with everyone else?</p>
+</blockquote>
+<p>The goal of this short blog post will be to present a solution to this problem using the concept of graphs.</p>
+<h4 id="the-complete-graph">The Complete Graph</h4>
+<p><img src="http://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Complete_graph_K7.svg/611px-Complete_graph_K7.svg.png" style="float:right; height:200px; width:200px" /></p>
+<p>First, we must understand the idea of a complete graph. A <strong>complete graph</strong> is a graph such that each node is connected to every other node. A graphical example can be seen to the right. We can use the model of a complete graph to reason about the problem at hand. The nodes in the graph may represent the people in the room, while the connecting edges represent the handshakes that must take place. As such, the key to solving the Handshake Problem is to count the edges in a complete graph. But it would be silly to draw out a graph and count the edges one-by-one in order to solve this problem (and would take a very long time for large values of <span class="math">\(n\)</span>), so we’ll use math!</p>
+<h4 id="the-solution">The Solution</h4>
+<p>To find the solution, we have to make a few key observations. The easiest way to start out in this case is to map out the first few complete graphs and try to find a pattern: Let <span class="math">\(n\)</span> = the number of nodes, <span class="math">\(e\)</span> = the number of edges.</p>
+<ul>
+<li><span class="math">\(n = 1 \Rightarrow e = 0\)</span></li>
+<li><span class="math">\(n = 2 \Rightarrow e = 1\)</span></li>
+<li><span class="math">\(n = 3 \Rightarrow e = 3\)</span></li>
+<li><span class="math">\(n = 4 \Rightarrow e = 6\)</span></li>
+</ul>
+<p>At this point, you may be noticing a pattern. As <span class="math">\(n\)</span> increases, we’re adding <span class="math">\(n -1\)</span> edges. This makes sense – each time a new node is introduced, it must connect to each node other than itself. In other words, <span class="math">\(n-1\)</span> connections must be made. It follows that the number of the edges (<span class="math">\(e\)</span>) in a complete graph with <span class="math">\(n\)</span> vertices can be represented by the sum <span class="math">\((n-1) + (n-2) + \dots + 1 + 0\)</span>, or more compactly as: <span class="math">\[\sum_{i=1}^n i-1\]</span> You may already know from summation laws that this evaluates to <span class="math">\(\frac{n(n-1)}{2}\)</span>. Let’s prove it.</p>
+<h4 id="the-proof">The Proof</h4>
+<p><em>Theorem:</em> <span class="math">\(\forall n \in \mathbb{N} : \sum_{i=1}^{n} i-1 = \frac{n(n-1)}{2}\)</span></p>
+<p><em>Proof:</em></p>
+<p><strong>Base case</strong>: Let <span class="math">\(n = 1\)</span>. Then, <span class="math">\(\frac{1(1-1)}{2} = \sum_{i=1}^1 i-1 = 0\)</span>.</p>
+<p><strong>Inductive step</strong>: Let <span class="math">\(n \in \mathbb{N}\)</span>. We need to prove that <span class="math">\(\frac{n(n-1)}{2} + n = \frac{n(n+1)}{2}\)</span>.</p>
+<p><span class="math">\[\begin{array} {lcl} \frac{n(n-1)}{2} + n &amp; = &amp;
+\frac{n(n-1)+2n}{2} \\ &amp; = &amp; \frac{n^2 - n + 2n}{2} \\ &amp; = &amp;
+\frac{n^2 + n}{2} \\ &amp; = &amp; \frac{n(n+1)}{2}■\end{array}\]</span></p>
+<p>We can now use the theorem knowing it’s correct, and, in fact, provide a solution to the original problem. The answer to the Handshake Problem involving <span class="math">\(n\)</span> people in a room is simply <span class="math">\(\frac{n(n-1)}{2}\)</span>. So, the next time someone asks you how many handshakes would have to take place in order for everyone in a room with 1029 people to shake each other’s hands, you can proudly answer “<strong>528906 handshakes!</strong>”</p>
+<p>Until next time,</p>
+<p>Ben</p>
+</div>
+<div id="disqus_thread"></div>
+    <script type="text/javascript">
+        /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+        var disqus_shortname = 'abstract-nonsense'; // required: replace example with your forum shortname
+
+        /* * * DON'T EDIT BELOW THIS LINE * * */
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</div>
+            </div>
+    <footer>
+        <p id="copyright">© Benjamin Kovach, 2013 <br />
+                          Follow me on <a href="http://github.com/5outh">GitHub</a> and <a href="http://twitter.com/bendotk">Twitter</a>!
+                          </p>
+    </footer>
+    <script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+    var disqus_shortname = 'abstract-nonsense'; // required: replace example with your forum shortname
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = '//' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+    </script>
+    
+    </body>     
+</html>

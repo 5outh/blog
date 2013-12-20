@@ -1,0 +1,629 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" style="position:relative;">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <title>Abstract Nonsense - Abstract Nonsense</title>
+        <link rel="stylesheet" type="text/css" href="./css/default.css" />
+        <link rel="stylesheet" type="text/css" href="./css/syntax.css" />
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.4.3/jquery.min.js"></script>
+        <script src="./js/Utils.js"></script>
+        <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+        </script>
+        <link href="http://fonts.googleapis.com/css?family=Alegreya+Sans+SC|Della+Respira|Montaga" rel="stylesheet" type="text/css">
+    </head>
+    <body id="main">
+        <div id="header">
+            <div id="logo">
+                <a href="./" id="main_title">Abstract Nonsense</a>
+                <p id="main_subtitle"><br /><a href="./">By Benjamin Kovach</a></p>
+            </div>
+            <div id="navigation">
+                <a href="./">Home</a>
+                <a href="./contact.html">Contact</a>
+                <a href="./cv.html">CV</a>
+                <a href="./archive.html">Archive</a>
+            </div>
+        </div>
+        <div id="content">
+            <center><h1 class="title"><a href="#">Abstract Nonsense</a></h1>
+                
+                
+                    </center>
+            <div id="main_body">
+                <ul class="blog_list">
+    
+    	<li>
+	    	<div class="post_header">
+	<a class="post_title" href="./posts/2013-12-19-bots4-clone.html">Making a Bots2 clone using Lenses and Pipes</a>
+	<p class="published">Published by Ben Kovach on December 19, 2013</p>
+</div>
+<div class="post_body">
+	<h4 id="about-bots2">About bots2</h4>
+<p>When I was in high school, I came across an internet game called bots2. Bots2 was a multiplayer game where people can log in, customize a robot, and autonomously fight against pre-built AI and other human players. The game would progress in rounds, wherein each robot would attempt to destroy its adversary. The game would continue until one robot dropped below 0 health, at which point the other robot would emerge victorious.</p>
+<p>Bots2 was purportedly <a href="http://bots4.net/documentation">attacked by hackers</a> and never brought back up. However, <a href="http://edmazur.com/">someone</a> has taken the liberty of creating a clone of the old game, named bots4. If you’re interested, <a href="http://bots4.net/">you can play bots4 here</a>. In fact, I might recommend playing around with it for a minute or two, because we’ll be building a (very) simple version of bots2 in this post!</p>
+<h4 id="preliminaries">Preliminaries</h4>
+<p>I only assume a basic familiarity with monad transformers in this post. If you need an introduction, <a href="http://blog.sigfpe.com">sigfpe</a> has a <a href="http://blog.sigfpe.com/2006/05/grok-haskell-monad-transformers.html">great introduction to them on his blog</a>. We’ll be using Russell O’Connor’s <a href="http://hackage.haskell.org/package/lens-family">Lens-Family</a> and Gabriel Gonzalez’ <a href="http://hackage.haskell.org/package/pipes">Pipes</a> libraries to make the implementation easy (and educational!).</p>
+<p>I also want to give a shout out to Gabriel, who was generous enough to personally review and edit my initial draft of the code in this post – it looks much better than it did before, thanks to him.</p>
+<p>Without further ado, let’s get started!</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import           </span><span class="dt">Pipes</span>
+<span class="kw">import qualified</span> <span class="dt">Pipes.Prelude</span> <span class="kw">as</span> <span class="dt">P</span>
+<span class="kw">import qualified</span> <span class="dt">System.Random</span> <span class="kw">as</span> <span class="dt">R</span>
+<span class="kw">import           </span><span class="dt">Lens.Family2</span>             
+<span class="kw">import           </span><span class="dt">Lens.Family2.Stock</span>       
+<span class="kw">import           </span><span class="dt">Lens.Family2.State.Lazy</span> 
+<span class="kw">import           </span><span class="dt">Control.Monad.Trans.State</span>
+<span class="kw">import           </span><span class="dt">Control.Monad</span>
+<span class="kw">import           </span><span class="dt">Control.Concurrent</span>(threadDelay)</code></pre>
+<h4 id="modeling-bots">Modeling Bots</h4>
+<p>The game we wish to build pits two bots against each other, who will fight to the death based on who has the better stats (and a bit of randomness). We’ll need to be able to model each bot as an entity along with its specific stats.</p>
+<p>During each round, each bot:</p>
+<ol style="list-style-type: decimal">
+<li>Deals damage to its opponent</li>
+<li>Has a chance to block (and take half damage)</li>
+<li>Has a chance to dodge (and take no damage)</li>
+</ol>
+<p>We’ll model a <code>Bot</code> like so:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Bot</span> <span class="fu">=</span> <span class="dt">Bot</span>
+    { _<span class="ot">name ::</span> <span class="dt">String</span>
+    , _<span class="ot">str  ::</span> <span class="dt">Int</span>
+    , _<span class="ot">dex  ::</span> <span class="dt">Int</span>
+    , _<span class="ot">con  ::</span> <span class="dt">Int</span>
+    , _<span class="ot">hp   ::</span> <span class="dt">Int</span>
+    } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</code></pre>
+<p>We’ll use <code>str</code> to modify damage output, <code>dex</code> to modify dodge chance, <code>con</code> to modify block chance, and <code>hp</code> to denote the amount of health the bot has remaining. We’ll also tack on a <code>name</code> so we can print out more informative messages during the game. Note the prefix <code>_</code> on each field; these are here so we can give our <code>Lens</code>es nicer names.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">name ::</span> <span class="dt">Lens'</span> <span class="dt">Bot</span> <span class="dt">String</span>
+str, dex, con,<span class="ot"> hp ::</span> <span class="dt">Lens'</span> <span class="dt">Bot</span> <span class="dt">Int</span>
+name k (<span class="dt">Bot</span> nm s d c h)  <span class="fu">=</span> fmap (\nm' <span class="ot">-&gt;</span> <span class="dt">Bot</span> nm' s d c h) (k nm)
+str  k (<span class="dt">Bot</span> nm s d c h)  <span class="fu">=</span> fmap (\s'  <span class="ot">-&gt;</span> <span class="dt">Bot</span> nm s' d c h) (k s )
+dex  k (<span class="dt">Bot</span> nm s d c h)  <span class="fu">=</span> fmap (\d'  <span class="ot">-&gt;</span> <span class="dt">Bot</span> nm s d' c h) (k d )
+con  k (<span class="dt">Bot</span> nm s d c h)  <span class="fu">=</span> fmap (\c'  <span class="ot">-&gt;</span> <span class="dt">Bot</span> nm s d c' h) (k c )
+hp   k (<span class="dt">Bot</span> nm s d c h)  <span class="fu">=</span> fmap (\h'  <span class="ot">-&gt;</span> <span class="dt">Bot</span> nm s d c h') (k h )</code></pre>
+<p>We can now define some <code>Lens</code>es for our <code>Bot</code> fields. We do this manually because it’s relatively simple and to avoid the <code>TemplateHaskell</code> requirement that comes along with Edward Kmett’s larger <a href="http://hackage.haskell.org/package/lens-3.10.0.1">Lens</a> library. Given a more complicated system, we might choose to use <a href="http://hackage.haskell.org/package/lens-3.10.0.1">Lens</a> to automatically generate these. However, this is a small program so the overhead isn’t necessary. Also, don’t worry too much about the declarations of the <code>Lens</code>es above: Just know that they allow us to do some cool stuff later on.</p>
+<p>With these <code>Lens</code>es defined and our <code>Bot</code> data type in place, we can move on to defining more of the game’s semantics.</p>
+<h4 id="more-types">More Types</h4>
+<p>We’ll need a data type to represent a bot’s actions during a single round, and a game state representing the global state of the game:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">Event</span>    <span class="fu">=</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>, <span class="dt">Bool</span>)
+<span class="kw">type</span> <span class="dt">BotState</span> <span class="fu">=</span> (<span class="dt">R.StdGen</span>, (<span class="dt">Bot</span>, <span class="dt">Bot</span>))</code></pre>
+<p>The <code>Event</code> type defines a round of a single Bot’s behavior in a 3-tuple – the first parameter corresponds to damage dealt, the second to whether or not the bot dodged, and the third to whether or not the bot blocked. We will process these events later.</p>
+<p>The <code>BotState</code> type boxes up a <code>StdGen</code> for us to use when generating random events, and a 2-tuple of <code>Bot</code>s – the player character’s bot and the enemy AI. This is all the global state we need in our game.</p>
+<p>We can make some new <code>Lens</code>es for these types, given that 2-tuples are easily indexed using <code>Lens</code>:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">generator ::</span> <span class="dt">Lens'</span> <span class="dt">BotState</span> <span class="dt">R.StdGen</span>
+generator <span class="fu">=</span> _1
+
+<span class="ot">player ::</span> <span class="dt">Lens'</span> <span class="dt">BotState</span> <span class="dt">Bot</span>
+player <span class="fu">=</span> _2<span class="fu">.</span>_1
+
+<span class="ot">enemy ::</span> <span class="dt">Lens'</span> <span class="dt">BotState</span> <span class="dt">Bot</span>
+enemy <span class="fu">=</span> _2<span class="fu">.</span>_2</code></pre>
+<p>Here we create a <code>Lens</code> that references the <code>StdGen</code> of the <code>BotState</code>, using <code>_1</code>. We can also compose <code>Lens</code>es using <code>.</code> (from the <code>Prelude</code>!) and we use this functionality with the simple <code>Lens</code>es <code>_1</code> and <code>_2</code> to make <code>Lens</code>es referencing the player and enemy AI in a <code>BotState</code>.</p>
+<p>Well, that’s about all the type declaring we need to do. Now we can get on with piecing together the actual gameplay.</p>
+<h4 id="generating-events">Generating Events</h4>
+<p>Now comes the fun part: actually programming the game mechanics. Essentially what we’d like to do is the following:</p>
+<ol style="list-style-type: decimal">
+<li>Generate an event for the player and enemy at the same time.</li>
+<li>Process each event.</li>
+<li>If either bot is dead, end the game and print an ending message.</li>
+</ol>
+<p>Here we’ll focus on (1), generating events. Let’s take a look at some code:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">genEvent ::</span> <span class="dt">Bot</span> <span class="ot">-&gt;</span> <span class="dt">StateT</span> <span class="dt">R.StdGen</span> <span class="dt">IO</span> <span class="dt">Event</span>
+genEvent bot <span class="fu">=</span> <span class="kw">do</span>
+    [n, m, r] <span class="ot">&lt;-</span> replicateM <span class="dv">3</span> <span class="fu">$</span> state (R.randomR (<span class="dv">0</span>, <span class="dv">100</span>))
+    <span class="kw">let</span> dodge <span class="fu">=</span> n <span class="fu">&lt;</span> <span class="dv">100</span> <span class="fu">*</span> bot<span class="fu">^.</span>dex <span class="ot">`div`</span> (bot<span class="fu">^.</span>dex <span class="fu">+</span> <span class="dv">50</span>)
+        block <span class="fu">=</span> m <span class="fu">&lt;</span> <span class="dv">100</span> <span class="fu">*</span> bot<span class="fu">^.</span>con <span class="ot">`div`</span> (bot<span class="fu">^.</span>con <span class="fu">+</span> <span class="dv">30</span>)
+        dmg   <span class="fu">=</span> bot<span class="fu">^.</span>str <span class="fu">+</span> (bot<span class="fu">^.</span>str <span class="fu">*</span> r) <span class="ot">`div`</span> <span class="dv">30</span>
+    return (dmg, dodge, block)</code></pre>
+<p>In order to generate an event for a bot, we grab three numbers between 0 and 100:</p>
+<ul>
+<li>n, which helps determine if the bot dodges,</li>
+<li>m, which helps determine if the bot blocks,</li>
+<li>and r, which helps determine how much damage the bot does.</li>
+</ul>
+<p>We can use the <code>state</code> combinator here to lift the computation <code>(R.randomR (0, 100))</code> to a computation in the <code>StateT</code> monad. We then perform some arithmetic using the random numbers we grabbed along with the <code>dex</code>, <code>con</code>, and <code>str</code> stats from our <code>Bot</code>. We access these using the <code>^.</code> combinator from the <code>lens-family</code>, using the <code>Lens</code>es we defined above.</p>
+<p>Important note: We are producing the amount of damage a bot <em>deals</em> here. We will want to process events according to how much damage each bot <em>receives</em>, which we’ll handle in a minute.</p>
+<p>Now that we can generate single events, we need a way of mapping them to specific bots. We’ll define a new function, <code>genEventPair</code>, to generate <em>two</em> events at once, corresponding to the player and the enemy in the game.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">genEventPair ::</span> <span class="dt">StateT</span> <span class="dt">BotState</span> <span class="dt">IO</span> (<span class="dt">Event</span>, <span class="dt">Event</span>)
+genEventPair <span class="fu">=</span> <span class="kw">do</span>
+    p <span class="ot">&lt;-</span> use player
+    e <span class="ot">&lt;-</span> use enemy
+    zoom generator <span class="fu">$</span> liftM2 switchDmgs (genEvent p) (genEvent e)
+  <span class="kw">where</span>
+    switchDmgs (a, b, c) (d, e, f) <span class="fu">=</span> ( (d, b, c), (a, e, f) )</code></pre>
+<p>There are a couple of new things at play here. First, on <code>use</code>:</p>
+<p>Note the use of our <code>Lens</code>es <code>player</code> and <code>enemy</code>. To access the underlying state in a <code>StateT</code>, we typically call the function <code>lift</code>. Here instead we call the function <code>use</code> from <code>Lens.Family2.State</code>, which allows us to specify which <em>piece</em> of our <code>BotState</code> we want to get. We do just this in order to generate events for both the <code>player</code> and <code>enemy</code>, using the aforementioned <code>Lens</code>es.</p>
+<p>Next, if you were looking closely you might have noticed that <code>genEvent</code> isn’t operating in the same monad as <code>genEventPair</code>, yet we use <code>genEvent</code> inside of <code>genEventPair</code>! We are able do do this using the <code>zoom</code> combinator.</p>
+<p><code>zoom</code> lifts a stateful operation on one field to a stateful operation on the entire state. Here, we’re zooming into <code>generator</code> (a <code>Lens</code> on our <code>StdGen</code>) and lifting the (stateful) generation of events for both the player and enemy into a (stateful) generation of <em>two</em> events while preserving player and enemy states. The fact that we can <code>zoom</code> into <code>genEvent</code> helps out the declaration immensely. It removes a lot of plumbing that we would have had to deal with in order to have <code>genEvent</code> operate on an underlying state of type <code>BotState</code> and allows the type of the computation to be more explicit.</p>
+<p>Finally, Note the use of <code>switchDmgs</code> here: This was an ad hoc way to switch around damage dealt and damage sustained. <code>genEventPair</code> produces events harboring damage <em>taken</em>, which is what we need in order to process them in a nice way.</p>
+<h4 id="processing-events">Processing Events</h4>
+<p>Now that we’re able to generate events and keep track of our game state, the next thing we need to do is actually process these events and update game state. We introduce <code>resolveEvent</code> to take care of this:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">resolveEvent ::</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span> (<span class="dt">Event</span>, <span class="dt">Event</span>) <span class="ot">-&gt;</span> <span class="dt">StateT</span> <span class="dt">BotState</span> m [(<span class="dt">Bot</span>, <span class="dt">Event</span>)]
+resolveEvent (p_evt, e_evt) <span class="fu">=</span> <span class="kw">do</span>
+    zoom player (resolve p_evt)
+    zoom enemy  (resolve e_evt)
+    p <span class="ot">&lt;-</span> use player
+    e <span class="ot">&lt;-</span> use enemy
+    return [(p, p_evt), (e, e_evt)]
+
+<span class="ot">resolve ::</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span> <span class="dt">Event</span> <span class="ot">-&gt;</span> <span class="dt">StateT</span> <span class="dt">Bot</span> m ()
+resolve (dmg, ddg, blk)
+    <span class="fu">|</span> ddg       <span class="fu">=</span> return ()
+    <span class="fu">|</span> blk       <span class="fu">=</span> hp <span class="fu">-=</span> dmg <span class="ot">`div`</span> <span class="dv">2</span>
+    <span class="fu">|</span> otherwise <span class="fu">=</span> hp <span class="fu">-=</span> dmg</code></pre>
+<p>First let’s look at the <code>resolve</code> function. Here we are taking an event and updating a <code>Bot</code>’s state based on that event. The implementation is straightforward, especially given that we have the <code>-=</code> <code>Lens</code> combinator at our disposal – this allows us to write imperative-looking code that does exactly what you would expect it to.</p>
+<p>In the <code>resolveEvent</code> function, you should see some similarities to the above section. We can again use <code>zoom</code> and <code>use</code> in order to lift computations and retrieve state just as before, but we’re updating the main game state now. We produce two 2-tuples containing modified bots and their attached event that was processed during each turn.</p>
+<p>At this point, the game logic is actually finished. We have ways to produce and deal with game events that modify game state, and provided that we can actually link these functions together (which we can, as we’ll see later), the game will actually run. All that we need to do now is handle IO and bot death. This is where <code>Pipes</code> comes in.</p>
+<h4 id="pipes-and-io">Pipes and IO</h4>
+<p>Let’s get the boring stuff out of the way first. I mentioned above that we have yet to deal with two major components of our game: IO and bot death. Let’s first define some simple functions to deal with these:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">dead ::</span> <span class="dt">Bot</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span>
+dead <span class="fu">=</span> (<span class="fu">&lt;=</span> <span class="dv">0</span>) <span class="fu">.</span> view hp
+
+<span class="ot">printBot ::</span> <span class="dt">Bot</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> ()
+printBot bot <span class="fu">=</span> putStrLn <span class="fu">$</span> bot<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; has &quot;</span> <span class="fu">++</span> show (bot<span class="fu">^.</span>hp) <span class="fu">++</span> <span class="st">&quot; hp remaining.&quot;</span>
+
+<span class="ot">printEvent ::</span> <span class="dt">Bot</span> <span class="ot">-&gt;</span> <span class="dt">Event</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> ()
+printEvent bot (_, <span class="dt">True</span>, _) <span class="fu">=</span> putStrLn <span class="fu">$</span>
+  bot<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; dodges the attack and takes no damage!&quot;</span>
+printEvent bot (d, _, <span class="dt">True</span>) <span class="fu">=</span> putStrLn <span class="fu">$</span> 
+  bot<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; blocks and takes half (&quot;</span> <span class="fu">++</span> show (d <span class="ot">`div`</span> <span class="dv">2</span>) <span class="fu">++</span> <span class="st">&quot;) damage!&quot;</span>
+printEvent bot (d, _,    _) <span class="fu">=</span> putStrLn <span class="fu">$</span> 
+  bot<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; takes &quot;</span> <span class="fu">++</span> show d <span class="fu">++</span> <span class="st">&quot; damage.&quot;</span></code></pre>
+<p>Here we again make use of our <code>Lens</code>es (these are handy, huh?). We use the <code>view</code> function in order to get the health of our bot in <code>dead</code>, and check whether its hp is less than 0 in the usual fashion. <code>view</code> is just a prefix synonym for the infix <code>^.</code> that we’ve been using all this time. Speaking of which, we use the <code>^.</code> combinator heavily in both <code>printEvent</code> and <code>printBot</code> to handle the string-handling plumbing. Since these functions essentially tell you what they’re doing implicitly, I’ll omit an extensive explanation.</p>
+<p>Now that we have ways to print <code>Bot</code>s and <code>Event</code>s and check for bot death, the last thing we need to do is actually perform these things the context of our game. A <code>Consumer</code> from the <code>Pipes</code> library will handle this nicely for us:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">printGame ::</span> <span class="dt">Consumer</span> [(<span class="dt">Bot</span>, <span class="dt">Event</span>)] (<span class="dt">StateT</span> <span class="dt">BotState</span> <span class="dt">IO</span>) ()
+printGame <span class="fu">=</span> <span class="kw">do</span>
+    botEvents<span class="fu">@</span>[(b1, e1), (b2, e2)] <span class="ot">&lt;-</span> await
+    (lift <span class="fu">.</span> lift) <span class="fu">$</span> <span class="kw">do</span>
+        forM_ botEvents <span class="fu">$</span> \be<span class="fu">@</span>(bot, event) <span class="ot">-&gt;</span> <span class="kw">do</span>
+            uncurry printEvent be
+            printBot bot
+            threadDelay <span class="dv">500000</span>
+            when (dead bot) <span class="fu">$</span> putStrLn <span class="fu">$</span> bot<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; died!&quot;</span>
+        putStrLn <span class="fu">$</span> <span class="kw">case</span> (dead b1, dead b2) <span class="kw">of</span>
+            (<span class="dt">True</span> , <span class="dt">True</span> ) <span class="ot">-&gt;</span> <span class="st">&quot;It was a tie!&quot;</span>
+            (<span class="dt">True</span> , <span class="dt">False</span>) <span class="ot">-&gt;</span> b2<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; wins!&quot;</span>
+            (<span class="dt">False</span>, <span class="dt">True</span> ) <span class="ot">-&gt;</span> b1<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; wins!&quot;</span>
+            _              <span class="ot">-&gt;</span> <span class="st">&quot;-----------------&quot;</span>
+    unless (any (dead <span class="fu">.</span> fst) botEvents) printGame</code></pre>
+<p>We <code>await</code> two <code>(Bot, Event)</code>s (from where, you might ask? We’ll see in a moment.) and essentially handle all of the plumbing here. For each pair of bots and events, we print the event, print the bot, then wait half a second with <code>threadDelay</code> (otherwise the game would run too quickly and we wouldn’t see it play out). With a <code>Consumer</code> like this, we need to loop until we’ve consumed all of the input we want, so we use the <code>when</code> and <code>unless</code> functions from <code>Control.Monad</code> as indicators of when to do so. If a bot dies, we stop – we also print out some information about who died and who won the game.</p>
+<h4 id="running-the-game">Running the Game</h4>
+<p>Okay, so I say that we have everything we need now, but you might ask…how do I run this? Let’s take a look at a program that pits two bots – a good guy and a bad guy – against one another, and we’ll dissect it.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">runGame ::</span> <span class="dt">IO</span> ()
+runGame <span class="fu">=</span> <span class="kw">do</span>
+    gen <span class="ot">&lt;-</span> R.getStdGen
+    <span class="kw">let</span> player <span class="fu">=</span> <span class="dt">Bot</span> <span class="st">&quot;The Good Guy&quot;</span> <span class="dv">19</span> <span class="dv">13</span> <span class="dv">12</span> <span class="dv">200</span>
+        enemy  <span class="fu">=</span> <span class="dt">Bot</span> <span class="st">&quot;The Bad Guy&quot;</span>  <span class="dv">14</span> <span class="dv">6</span>  <span class="dv">10</span> <span class="dv">200</span>
+        startState <span class="fu">=</span> (gen, (player, enemy))
+    flip evalStateT startState 
+      <span class="fu">$</span> runEffect 
+      <span class="fu">$</span> lift (genEventPair <span class="fu">&gt;&gt;=</span> resolveEvent) <span class="fu">&gt;~</span> printGame</code></pre>
+<p>In the first few lines, we simply set up an initial state for the game. The real “stuff” happens in the line starting with <code>flip evalStateT</code>. We’ll work through this at a type level from the inside-out. First, we perform <code>genEventPair &gt;&gt;= resolveEvent</code>, which effectively handles the logic we talked about earlier and produces a <code>StateT BotState IO [(Bot, Event)]</code>. From here, we <code>lift</code> the computation into an <code>Effect (StateT BotState IO) [(Bot, Event)]</code>, which we then repeatedly pipe into <code>printGame</code> with <code>&gt;~</code>. After all of this, we <code>runEffect</code> to extract the <code>StateT BotState IO [(Bot, Event)]</code> from the computation, and finally evaluate the function using <code>evalStateT</code>. Phew!</p>
+<p>In any case, we can now run our program and execute the game…</p>
+<pre class="sourceCode c"><code class="sourceCode c">*Main&gt; runGame
+The Good Guy takes <span class="dv">15</span> damage.
+The Good Guy has <span class="dv">285</span> hp remaining.
+The Bad Guy takes <span class="dv">29</span> damage.
+The Bad Guy has <span class="dv">171</span> hp remaining.
+-----------------
+The Good Guy dodges the attack and takes no damage!
+The Good Guy has <span class="dv">285</span> hp remaining.
+The Bad Guy takes <span class="dv">20</span> damage.
+The Bad Guy has <span class="dv">151</span> hp remaining.
+-----------------
+The Good Guy blocks and takes half (<span class="dv">24</span>) damage!
+The Good Guy has <span class="dv">261</span> hp remaining.
+The Bad Guy takes <span class="dv">34</span> damage.
+The Bad Guy has <span class="dv">117</span> hp remaining.
+-----------------
+The Good Guy takes <span class="dv">46</span> damage.
+The Good Guy has <span class="dv">215</span> hp remaining.
+The Bad Guy takes <span class="dv">19</span> damage.
+The Bad Guy has <span class="dv">98</span> hp remaining.
+-----------------
+The Good Guy takes <span class="dv">32</span> damage.
+The Good Guy has <span class="dv">183</span> hp remaining.
+The Bad Guy takes <span class="dv">37</span> damage.
+The Bad Guy has <span class="dv">61</span> hp remaining.
+-----------------
+The Good Guy dodges the attack and takes no damage!
+The Good Guy has <span class="dv">183</span> hp remaining.
+The Bad Guy takes <span class="dv">12</span> damage.
+The Bad Guy has <span class="dv">49</span> hp remaining.
+-----------------
+The Good Guy takes <span class="dv">24</span> damage.
+The Good Guy has <span class="dv">159</span> hp remaining.
+The Bad Guy takes <span class="dv">23</span> damage.
+The Bad Guy has <span class="dv">26</span> hp remaining.
+-----------------
+The Good Guy dodges the attack and takes no damage!
+The Good Guy has <span class="dv">159</span> hp remaining.
+The Bad Guy takes <span class="dv">36</span> damage.
+The Bad Guy has -<span class="dv">10</span> hp remaining.
+The Bad Guy died!
+The Good Guy wins!</code></pre>
+<p>…and behold, the good guy wins (this time)!</p>
+<p><a href="https://gist.github.com/5outh/8049361">View full source on GitHub</a>.</p>
+<p>- Ben</p>
+</div>
+
+	    	<a class="disqus_link" href="./posts/2013-12-19-bots4-clone.html#disqus_thread"></a>
+    	</li>
+    
+    	<li>
+	    	<div class="post_header">
+	<a class="post_title" href="./posts/2013-11-13-parsing-negating.html">Parsing and Negating Boolean Strings in Haskell</a>
+	<p class="published">Published by Ben Kovach on November 13, 2013</p>
+</div>
+<div class="post_body">
+	<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE NoMonomorphismRestriction #-}</span>
+ 
+<span class="kw">import </span><span class="dt">Text.ParserCombinators.Parsec</span>
+<span class="kw">import </span><span class="dt">Text.ParserCombinators.Parsec.Token</span> <span class="kw">hiding</span> (parens)
+<span class="kw">import </span><span class="dt">Text.ParserCombinators.Parsec.Expr</span>
+<span class="kw">import </span><span class="dt">Control.Applicative</span> <span class="kw">hiding</span> ((&lt;|&gt;))
+<span class="kw">import </span><span class="dt">Control.Monad</span>
+<span class="kw">import </span><span class="dt">Prelude</span> <span class="kw">hiding</span> (not)</code></pre>
+<p>It appears that <a href="http://www.reddit.com/r/dailyprogrammer/">the dailyprogrammer subreddit</a> is back after a pretty long hiatus, and they kicked back into gear with a really interesting problem. The problem was, paraphrasing:</p>
+<blockquote>
+<p>Given a Boolean expression as a string S, compute and print the negation of S as a string using DeMorgan’s laws.</p>
+</blockquote>
+<p><a href="http://www.reddit.com/r/dailyprogrammer/comments/1qira9/111213_challenge_135_intermediate_de_morgans_law/">The problem is also detailed in full here</a>. I completed the challenge and posted my solution to reddit, but wanted to share it here as well, so here it is, with slight modifications:</p>
+<p>This is a problem that is heavily suited to three major things that Haskell advocates: Algebraic Data Types, Pattern Matching, and Monadic Parsing. First off, if you’ve had any experience with automata theory, it’s pretty clear that the input language of Boolean expressions can be represented by a <a href="http://en.wikipedia.org/wiki/Context-free_grammar">context free grammar</a>. It just so happens that Haskell makes it incredibly easy to model CFGs right out of the box using Algebraic Data Types.</p>
+<p>Let’s take a look at this data type representing Boolean expressions:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Expr</span> <span class="fu">=</span> <span class="dt">Not</span> <span class="dt">Expr</span> 
+          <span class="fu">|</span> <span class="dt">And</span> <span class="dt">Expr</span> <span class="dt">Expr</span> 
+          <span class="fu">|</span> <span class="dt">Or</span> <span class="dt">Expr</span> <span class="dt">Expr</span> 
+          <span class="fu">|</span> <span class="dt">Var</span> <span class="dt">Char</span> 
+          <span class="fu">|</span> <span class="dt">SubExpr</span> <span class="dt">Expr</span> 
+          <span class="kw">deriving</span> <span class="dt">Eq</span></code></pre>
+<p>Simple. Now, the main problem of this challenge was actually performing the simplification of the not operation. Using pattern matching, we can <em>directly encode these rules</em> in the following manner:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">not<span class="ot"> ::</span> <span class="dt">Expr</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span>
+not (<span class="dt">Not</span> e)     <span class="fu">=</span> e
+not (<span class="dt">And</span> e1 e2) <span class="fu">=</span> <span class="dt">Or</span> (not e1) (not e2)
+not (<span class="dt">Or</span> e1 e2)  <span class="fu">=</span> <span class="dt">And</span> (not e1) (not e2)
+not (<span class="dt">Var</span> c)     <span class="fu">=</span> <span class="dt">Not</span> (<span class="dt">Var</span> c)
+not (<span class="dt">SubExpr</span> e) <span class="fu">=</span> not e</code></pre>
+<p>Here we’re giving a literal definition of rules for negating Boolean expressions. If you use Haskell, this is really easy to read. If you don’t: stare at it for a second; you’ll see what it’s doing! That’s the brunt of the challenge, right there. That’s it. Encode a Boolean expression into an <code>Expr</code> and call <code>not</code> on it, and it will spit out a new <code>Expr </code>expressing the negation of your original expression. DeMorgan’s laws are represented in the <code>And</code> and <code>Or</code> rules.We can also do this in a slightly modified way, using a function <code>simplify :: Expr -&gt; Expr</code> that simplifies expressions and another function <code>not = simplify . Not</code> to compute the same thing. It’s a similar solution so I won’t post it, but if you’d like to, feel free to experiment and/or add more simplification rules (e.g. <code>simplify e@(And a b) = if a == b then a else e</code>). We can also display our expressions as a string by declaring <code>Expr</code> an instance of <code>Show</code> in the following way:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">instance</span> <span class="dt">Show</span> <span class="dt">Expr</span> <span class="kw">where</span>
+  show (<span class="dt">Not</span> e)     <span class="fu">=</span> <span class="st">&quot;NOT &quot;</span> <span class="fu">++</span> show e
+  show (<span class="dt">And</span> e1 e2) <span class="fu">=</span> show e1 <span class="fu">++</span> <span class="st">&quot; AND &quot;</span> <span class="fu">++</span> show e2
+  show (<span class="dt">Or</span> e1 e2)  <span class="fu">=</span> show e1 <span class="fu">++</span> <span class="st">&quot; OR &quot;</span>  <span class="fu">++</span> show e2
+  show (<span class="dt">Var</span> c)     <span class="fu">=</span> [c]
+  show (<span class="dt">SubExpr</span> e) <span class="fu">=</span> <span class="st">&quot;(&quot;</span> <span class="fu">++</span> show e <span class="fu">++</span> <span class="st">&quot;)&quot;</span></code></pre>
+<p>Now we can type in Boolean expressions using our data type, not them, and print them out as nice expressions. But, now we are faced with, in my opinion, the tougher part of the challenge. We’re able to actually compute everything we need to, but what about parsing a Boolean expression (as a string) into an <code>Expr</code>? We can use a monadic parsing library, namely Haskell’s beloved <a href="http://www.haskell.org/haskellwiki/Parsec">Parsec</a>, to do this in a rather simple way. We’ll be using Parsec’s <a href="http://hackage.haskell.org/package/parsec-3.0.0/docs/Text-Parsec-Token.html">Token</a> and <a href="http://hackage.haskell.org/package/parsec-3.0.0/docs/Text-Parsec-Expr.html">Expr</a> libraries, as well as the base, in this example. Let’s take a look.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parseExpr ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Either</span> <span class="dt">ParseError</span> <span class="dt">Expr</span>
+parseExpr <span class="fu">=</span> parse expr <span class="st">&quot;&quot;</span>
+  <span class="kw">where</span> expr      <span class="fu">=</span> buildExpressionParser operators term <span class="fu">&lt;?&gt;</span> <span class="st">&quot;compound expression&quot;</span>
+        term      <span class="fu">=</span>  parens expr <span class="fu">&lt;|&gt;</span> variable <span class="fu">&lt;?&gt;</span> <span class="st">&quot;full expression&quot;</span>
+        operators <span class="fu">=</span> [ [<span class="dt">Prefix</span> (string <span class="st">&quot;NOT&quot;</span> <span class="fu">&gt;&gt;</span> spaces <span class="fu">&gt;&gt;</span> return <span class="dt">Not</span>)]
+                    , [binary <span class="st">&quot;AND&quot;</span> <span class="dt">And</span>]
+                    , [binary <span class="st">&quot;OR&quot;</span> <span class="dt">Or</span>] ]
+          <span class="kw">where</span> binary n c <span class="fu">=</span> <span class="dt">Infix</span> (string n <span class="fu">*&gt;</span> spaces <span class="fu">*&gt;</span> pure c) <span class="dt">AssocLeft</span>
+        variable <span class="fu">=</span> <span class="dt">Var</span>     <span class="fu">&lt;$&gt;</span> (letter <span class="fu">&lt;*</span> spaces)                              
+                           <span class="fu">&lt;?&gt;</span> <span class="st">&quot;variable&quot;</span>
+        parens p <span class="fu">=</span> <span class="dt">SubExpr</span> <span class="fu">&lt;$&gt;</span> (char <span class="ch">'('</span> <span class="fu">*&gt;</span> spaces <span class="fu">*&gt;</span> p <span class="fu">&lt;*</span> char <span class="ch">')'</span> <span class="fu">&lt;*</span> spaces) 
+                           <span class="fu">&lt;?&gt;</span> <span class="st">&quot;parens&quot;</span></code></pre>
+<p>We essentially define the structure of our input here and parse it into an Expr using a bunch of case-specific parsing rules. <code>variable</code> parses a single <code>char</code> into a <code>Var</code>, <code>parens</code> matches and returns a <code>SubExpr</code>, and everything else is handled by using the convenience function <code>buildExpressionParser</code> along with a list of operator strings, the types they translate to and their operator precedence. Here we’re using applicative style to do our parsing, but monadic style is fine too. <a href="http://www.serpentine.com/blog/2008/02/06/the-basics-of-applicative-functors-put-to-practical-work/">Check this out for more on applicative style parsing</a>.</p>
+<p>Given that, we can define a <code>main</code> function to read in a file of expressions and output the negation of each of the expressions, like so:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">main <span class="fu">=</span> mapM_ printNotExpr <span class="fu">.</span> lines <span class="fu">=&lt;&lt;</span> readFile <span class="st">&quot;inputs.txt&quot;</span>
+  <span class="kw">where</span> printNotExpr e <span class="fu">=</span> <span class="kw">case</span> parseExpr e <span class="kw">of</span>
+                          <span class="dt">Right</span> x <span class="ot">-&gt;</span> print <span class="fu">$</span> not x
+                          <span class="dt">Left</span>  e <span class="ot">-&gt;</span> error <span class="fu">$</span> show e</code></pre>
+<p>Concise and to the point. We make sure that each line gets parsed properly, not the expressions, and print them. Here’s what we get when we run the program:</p>
+<pre><code>inputs.txt                             --- output
+
+a                                      --- NOT a
+NOT a                                  --- a
+a AND b                                --- NOT a OR NOT b 
+NOT a AND b                            --- a OR NOT b
+NOT (a AND b)                          --- a AND b
+NOT (a OR b AND c) OR NOT(a AND NOT b) --- (a OR b AND c) AND (a AND NOT b)</code></pre>
+<p><a href="https://gist.github.com/5outh/7452588#file-demorgan-hs">Finally, here’s the full source on Github</a>.</p>
+<p>Thanks for reading!</p>
+</div>
+
+	    	<a class="disqus_link" href="./posts/2013-11-13-parsing-negating.html#disqus_thread"></a>
+    	</li>
+    
+    	<li>
+	    	<div class="post_header">
+	<a class="post_title" href="./posts/2013-08-27-ludum-dare.html">Ludum Dare 27: A Post-mortem</a>
+	<p class="published">Published by Ben Kovach on August 27, 2013</p>
+</div>
+<div class="post_body">
+	<h4 id="what-is-ludum-dare">What is Ludum Dare?</h4>
+<p><a href="http://www.ludumdare.com/compo/">Ludum Dare</a> is a friendly competition among game developers to see who can make the best game based on a given theme in 48 hours. This was the 27th competition, and the theme was “10 seconds.”</p>
+<h4 id="why-did-i-want-to-participate">Why did I want to participate?</h4>
+<p><img src="http://2.bp.blogspot.com/-C5uKdb6VMHA/Uh0CIyE4VOI/AAAAAAAAAHg/Ws8COqbSITA/s1600/25390-shot0.png" class="right" style="width:400px"></a> For a long time, I’ve been looking at the game development community from the outside with a lens that I feel a lot of people tend to see through. I’ve always considered game development an extremely intricate and difficult field to enter, and I was scared of trying my hand at it for a long time. I have made small clones of other games (pong, sokoban, etc) and I have enjoyed making those games, but they’re both relatively simple (exercise-sized, almost, to a certain extent). I have been wanting to get a little further into the game development scene for a while, and Ludum Dare seemed like the perfect opportunity. I’ve seen several Ludum Dare competitions go by over the past couple of years and I never thought I was good enough to actually do it. This time, I just went for it, and I’m really glad I did.</p>
+<h4 id="what-did-i-make">What did I make?</h4>
+<p>When the theme “10 seconds” was announced, I had a billion and one ideas going through my head, because it’s so open-ended. Everyone’s first idea was to make a 10-second game, but that doesn’t really work, so you had to move on to the next thing. I bounced a couple of ideas around in my head, but I ultimately decided to make a twin-stick roguelike-like because:</p>
+<ol style="list-style-type: decimal">
+<li>Movement and collision detection is relatively simple to implement, and</li>
+<li>As all of my friends know, I’m a big fan of <a href="http://en.wikipedia.org/wiki/The_Binding_of_Isaac_(video_game)">The Binding of Isaac</a>, and I’m always thinking about how that game and games similar in nature to it are put together.</li>
+</ol>
+<p>I ended up calling my game “Wappansai!” because it was one of the random strings I stuck in as a debug message as I was developing. It doesn’t mean anything other than that. Anyway, in Wappansai!, you’re a big fat square ninja man who is stuck in a dungeon with some red business-men enemies. They don’t move, but if you don’t murder all of the enemies in the room within <strong>10 seconds</strong>, you die. Running into enemies also kills you, as does falling into the many pits laid out around the room. Later on, moving spike tiles get added, and those kill you as well. When you clear a room under 10 seconds, a door opens up and you move on to the next room where things get progressively more difficult. I think my high score in the final version of the game was somewhere around 17 rooms, so I definitely challenge everyone to beat that! Oh, and the tools I used were C++ and SDL 2.0, sfxr for sound bytes, and photoshop for graphics. I didn’t get around to making music because I don’t even know where to start with that!</p>
+<h4 id="what-did-i-learn">What did I learn?</h4>
+<p>I have been reading <a href="http://www.amazon.com/Programming-Game-Example-Mat-Buckland/dp/1556220782">Programming Game AI by Example</a> on and off for a little while, and I decided to use Ludum Dare as an opportunity to start learning a little more about the <a href="http://en.wikipedia.org/wiki/State_pattern">State Design Pattern</a> and <a href="http://en.wikipedia.org/wiki/Singleton_pattern">Singletons</a>, two concepts introduced early on in that book. I worked on throwing together a shell of a program that implemented these things before the competition, so I wouldn’t have to figure everything out as I was trying to get things done over the 48 hours, which was definitely a good idea. I was able to start working right when the clock started ticking instead of worrying about getting the design right as I was trying to implement the program. I’d recommend doing this if you plan to participate in a game jam; it really helped me out. That said, there were still some design pitfalls. For example, when you open chests in the game, there’s a (very slim) chance that you’ll get a laser gun from inside of it (usually it just takes all of your currently held items – haha!), but the gun doesn’t spawn anywhere when this happens; it just magically goes into your character’s weapon slot and suddenly you’re firing lasers. The way I wanted this to work was, if you got lucky and got the laser gun from the chest, the gun would spawn somewhere on the map and you could go pick it up and feel awesome that that chest that normally screws you over by stealing all of your items just happened to spawn a freakin’ laser gun for you to play with. But, the way I organized my project, Tile objects had no way to modify Level objects, so I was unable to trigger an event when the chest (a type of Tile) was touched to modify the level (a Level), so I had to make a compromise there. There are certainly workarounds that I considered, but I couldn’t really do them within the time limit. It was a design flaw, and now I know that it was a design flaw. I can structure my code better now – that was one major learning point.</p>
+<p><img src="http://4.bp.blogspot.com/-d2Tcd-4PCiM/Uh0CI8r_h7I/AAAAAAAAAHc/NsQtn54CdGo/s400/25390-shot1.png" class="right"></a></p>
+<p>I also learned a lot about randomly generated content, that was crazy! It actually went a lot smoother than I thought it would, but just seeing everything so randomized was amazing. Items, weapons, enemies, pits, and walls all get generated randomly based on how many rooms you’ve traversed, and just seeing that in play working (relatively) nicely was so cool. So I learned a lot there. The final, really huge thing that I discovered was that…holy crap, there are a lot of assets that go into games! I must have made over 50 sprites for Wappansai!, on top of tons of different sound clips (sfxr made this easy). A lot more time went into art than I expected, and I didn’t even animate anything…you don’t really think about it, but games have tons and tons of assets involved.</p>
+<h4 id="would-i-do-it-again">Would I do it again?</h4>
+<p><img class="right" src="http://2.bp.blogspot.com/-D5-Ewsy8IWs/Uh0CI_MUg3I/AAAAAAAAAHY/TIYg51u7Xqc/s400/25390-shot2.png"></a></p>
+<p>Finishing a game in two days was really hard work and it could be really frustrating at times (especially using C++ with VS, those error messages are completely incomprehensible). But, it was totally worth the effort. I can say that I’ve made a game that is completely mine, and even though it’s not very good, it’s something that<em>I</em> made and I love that I made it and I’m excited to make more things. It’s also really amazing that people actually do play your games. I’ve had several comments on my ludum dare game’s page already discussing the game that <em>I</em> made, and it’s so cool to see that. Playing everyone else’s games is also really awesome because you know that they went through the same thing that you did. Everyone’s really proud of their work, everyone worked hard to get something done, and it’s just a really nice community event that I’m so happy to have been a part of. I would absolutely do it again, and plan to!</p>
+<h4 id="who-would-i-recommend-ludum-dare-to">Who would I recommend Ludum Dare to?</h4>
+<p>If you want to make games, do it. If you don’t know where to start, there are plenty of websites that can teach you the basics, and even if you don’t want/ know how to program, there are tools out there like <a href="http://www.yoyogames.com/gamemaker/studio">GameMaker Studio</a> that will allow you to program your game’s logic without actually writing code. If you don’t think you can do it alone, team up with someone. But if you want to make video games and have at least a basic knowledge of how they work, I think that Ludum Dare is an excellent way to test your skills and build something that you’ll be proud of.</p>
+<h4 id="where-can-you-download-my-game">Where can you download my game?</h4>
+<p>You can download, rate, and comment on <a href="http://www.ludumdare.com/compo/ludum-dare-27/?action=preview&amp;uid=25390">Wappansai!</a> over at the <a href="http://www.ludumdare.com/compo/ludum-dare-27/?action=preview&amp;uid=25390">Ludum Dare page</a> for it. Thanks for reading!</p>
+</div>
+
+	    	<a class="disqus_link" href="./posts/2013-08-27-ludum-dare.html#disqus_thread"></a>
+    	</li>
+    
+    	<li>
+	    	<div class="post_header">
+	<a class="post_title" href="./posts/2013-05-01-symbolic-calculus.html">Symbolic Calculus in Haskell</a>
+	<p class="published">Published by Ben Kovach on May  1, 2013</p>
+</div>
+<div class="post_body">
+	<h4 id="motivation">Motivation</h4>
+<p>It’s relatively simple to write a program to approximate derivatives. We simply look at the limit definition of a derivative: <span class="math">\[ \frac{d}{dx}
+f(x) = \lim_{h \rightarrow 0} \frac{f(x+h) - f(x)}{h} \]</span> and choose some small decimal number to use for <span class="math">\(h\)</span> instead of calculating the limit of the function as it goes to <span class="math">\(0\)</span>. Generally, this works pretty well. We get good approximations as long as <span class="math">\(h\)</span> is small enough. However, these approximations are not quite exact, and they can only be evaluated at specific points (for example, we can find <span class="math">\(\frac{d}{dx}f(5)\)</span>, but not the actual symbolic function). So, what if we want to know what <span class="math">\(\frac{d}{dx}f(x)\)</span> is <em>for all x</em>? Calculating derivatives with this approximation method won’t do the trick for us – we’ll need something a little more powerful, which is what we will build in this post. Admittedly, this idea didn’t come to me through necessity of such a system; I was just curious. It ended up being pretty enlightening, and it’s amazing how simple Haskell makes this type of thing. Most of the code in this post didn’t take too long to write, it’s relatively short (only 108 lines total, including whitespace) and has a lot of capability. With that, let’s get started!</p>
+<h4 id="the-data-type">The Data Type</h4>
+<p>I don’t want to over-complicate the process of taking derivatives, so my data type for algebraic expressions is kept minimal. We support six different types of expressions:</p>
+<ul>
+<li>Variables (denoted by a single character)</li>
+<li>Constant values</li>
+<li>Addition</li>
+<li>Multiplication</li>
+<li>Exponentiation</li>
+<li>Division</li>
+</ul>
+<p>This can be expanded upon, but this is adequate for the purpose of demonstration.</p>
+<p>Here is our <code>Expr a</code> type, with a sample expression representing <span class="math">\(3x^2\)</span>:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">infixl</span> <span class="dv">4</span> <span class="fu">:+:</span>
+<span class="kw">infixl</span> <span class="dv">5</span> <span class="fu">:*:</span>, <span class="fu">:/:</span>
+<span class="kw">infixr</span> <span class="dv">6</span> <span class="fu">:^:</span>
+
+<span class="kw">data</span> <span class="dt">Expr</span> a <span class="fu">=</span> <span class="dt">Var</span> <span class="dt">Char</span>
+             <span class="fu">|</span> <span class="dt">Const</span> a 
+             <span class="fu">|</span> (<span class="dt">Expr</span> a) <span class="fu">:+:</span> (<span class="dt">Expr</span> a) 
+             <span class="fu">|</span> (<span class="dt">Expr</span> a) <span class="fu">:*:</span> (<span class="dt">Expr</span> a)
+             <span class="fu">|</span> (<span class="dt">Expr</span> a) <span class="fu">:^:</span> (<span class="dt">Expr</span> a)
+             <span class="fu">|</span> (<span class="dt">Expr</span> a) <span class="fu">:/:</span> (<span class="dt">Expr</span> a)
+             <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+<span class="ot">sampleExpr ::</span> <span class="dt">Expr</span> <span class="dt">Double</span>
+sampleExpr <span class="fu">=</span> <span class="dt">Const</span> <span class="dv">3</span> <span class="fu">:*:</span> <span class="dt">Var</span> <span class="ch">'x'</span> <span class="fu">:^:</span> <span class="dt">Const</span> <span class="dv">2</span> <span class="co">--3x^2</span></code></pre>
+<p>Haskell allows infix operators to act as data constructors, which allows us to express algebraic expressions cleanly and concisely without too much mental parsing. Also note that, since we explicitly defined operator precedence above the data type declaration, we can write expressions without parentheses according to order of operations, like we did in the sample expression.</p>
+<h4 id="the-algebra">The Algebra</h4>
+<p>Taking derivatives simply by the rules can get messy, so we might as well go ahead and set up an algebra simplification function that cleans up our final expressions for us. This is actually incredibly simple. As long as you know algebraic laws, this kind of thing basically writes itself in Haskell. We just need to pattern match against certain expressions and meld them together according to algebraic law. This function ends up being lengthy long due to the fact that symbolic manipulation is mostly just a bunch of different cases, but we can encode algebraic simplification rules for our above data type in a straightforward way. The following simplify function takes an expression and spits out a simpler one that means the same thing. It’s really just a bunch of pattern-matching cases, so feel free to skim it.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">simplify ::</span> (<span class="dt">Num</span> a, <span class="dt">Eq</span> a, <span class="dt">Floating</span> a) <span class="ot">=&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a
+simplify (<span class="dt">Const</span> a <span class="fu">:+:</span> <span class="dt">Const</span> b) <span class="fu">=</span> <span class="dt">Const</span> (a <span class="fu">+</span> b)
+simplify (a       <span class="fu">:+:</span> <span class="dt">Const</span> <span class="dv">0</span>) <span class="fu">=</span> simplify a
+simplify (<span class="dt">Const</span> <span class="dv">0</span> <span class="fu">:+:</span> a      ) <span class="fu">=</span> simplify a
+
+simplify (<span class="dt">Const</span> a <span class="fu">:*:</span> <span class="dt">Const</span> b) <span class="fu">=</span> <span class="dt">Const</span> (a<span class="fu">*</span>b)
+simplify (a <span class="fu">:*:</span> <span class="dt">Const</span> <span class="dv">1</span>)         <span class="fu">=</span> simplify a
+simplify (<span class="dt">Const</span> <span class="dv">1</span> <span class="fu">:*:</span> a)         <span class="fu">=</span> simplify a
+simplify (a <span class="fu">:*:</span> <span class="dt">Const</span> <span class="dv">0</span>)         <span class="fu">=</span> <span class="dt">Const</span> <span class="dv">0</span>
+simplify (<span class="dt">Const</span> <span class="dv">0</span> <span class="fu">:*:</span> a)         <span class="fu">=</span> <span class="dt">Const</span> <span class="dv">0</span>
+
+simplify (<span class="dt">Const</span> a <span class="fu">:^:</span> <span class="dt">Const</span> b)       <span class="fu">=</span> <span class="dt">Const</span> (a<span class="fu">**</span>b)
+simplify (a <span class="fu">:^:</span> <span class="dt">Const</span> <span class="dv">1</span>)             <span class="fu">=</span> simplify a
+simplify (a <span class="fu">:^:</span> <span class="dt">Const</span> <span class="dv">0</span>)             <span class="fu">=</span> <span class="dt">Const</span> <span class="dv">1</span>
+simplify ((c <span class="fu">:^:</span> <span class="dt">Const</span> b) <span class="fu">:^:</span> <span class="dt">Const</span> a) <span class="fu">=</span> c <span class="fu">:^:</span> (<span class="dt">Const</span> (a<span class="fu">*</span>b))
+
+simplify (<span class="dt">Const</span> a <span class="fu">:*:</span> (<span class="dt">Const</span> b <span class="fu">:*:</span> expr)) <span class="fu">=</span> (<span class="dt">Const</span> <span class="fu">$</span> a<span class="fu">*</span>b) <span class="fu">:*:</span> (simplify expr)
+simplify (<span class="dt">Const</span> a <span class="fu">:*:</span> expr <span class="fu">:*:</span> <span class="dt">Const</span> b) <span class="fu">=</span> (<span class="dt">Const</span> <span class="fu">$</span> a<span class="fu">*</span>b) <span class="fu">:*:</span> (simplify expr)
+simplify (expr <span class="fu">:*:</span> <span class="dt">Const</span> a <span class="fu">:*:</span> <span class="dt">Const</span> b) <span class="fu">=</span> (<span class="dt">Const</span> <span class="fu">$</span> a<span class="fu">*</span>b) <span class="fu">:*:</span> (simplify expr)
+simplify (<span class="dt">Const</span> a <span class="fu">:*:</span> (b <span class="fu">:+:</span> c))        <span class="fu">=</span> (<span class="dt">Const</span> a <span class="fu">:*:</span> (simplify b)) <span class="fu">:+:</span> (<span class="dt">Const</span> a <span class="fu">:*:</span> (simplify c))
+
+simplify (<span class="dt">Const</span> <span class="dv">0</span> <span class="fu">:/:</span> a        ) <span class="fu">=</span> <span class="dt">Const</span> <span class="dv">0</span>
+simplify (<span class="dt">Const</span> a <span class="fu">:/:</span> <span class="dt">Const</span> <span class="dv">0</span>)   <span class="fu">=</span> error <span class="st">&quot;Division by zero!&quot;</span>
+simplify (<span class="dt">Const</span> a <span class="fu">:/:</span> <span class="dt">Const</span> b)   <span class="fu">|</span> a <span class="fu">==</span> b <span class="fu">=</span> <span class="dt">Const</span> <span class="dv">1</span> <span class="co">-- only when a == b</span>
+simplify (a       <span class="fu">:/:</span> <span class="dt">Const</span> <span class="dv">1</span>)   <span class="fu">=</span> simplify a
+
+simplify (a <span class="fu">:/:</span> b)  <span class="fu">=</span> (simplify a) <span class="fu">:/:</span> (simplify b)
+simplify (a <span class="fu">:^:</span> b)  <span class="fu">=</span> (simplify a) <span class="fu">:^:</span> (simplify b)
+simplify (a <span class="fu">:*:</span> b)  <span class="fu">=</span> (simplify a) <span class="fu">:*:</span> (simplify b)
+simplify (a <span class="fu">:+:</span> b)  <span class="fu">=</span> (simplify a) <span class="fu">:+:</span> (simplify b)
+simplify x          <span class="fu">=</span> id x
+
+fullSimplify expr <span class="fu">=</span> fullSimplify' expr (<span class="dt">Const</span> <span class="dv">0</span>) <span class="co">-- placeholder</span>
+  <span class="kw">where</span> fullSimplify' cur last <span class="fu">|</span> cur <span class="fu">==</span> last <span class="fu">=</span> cur
+                               <span class="fu">|</span> otherwise <span class="fu">=</span> <span class="kw">let</span> cur' <span class="fu">=</span> simplify cur
+                                             <span class="kw">in</span> fullSimplify' cur' cur</code></pre>
+<p>I’ve also included a <code>fullSimplify</code> function that runs simplify on an expression until the current input matches the last output of simplify (which ensures an expression is completely simplified)*. Note that in the <code>simplify</code> function, I’ve covered a lot of bases, but not all of them. Specifically, division simplification is lacking because it gets complicated quickly and I didn’t want to focus on that in this blog post. We should also note that we don’t have a data type expressing subtraction or negative numbers, so we’ll deal with that now. In order to express the negation of expressions, we define the <code>negate'</code> function, which basically multiplies expressions by <span class="math">\(-1\)</span> and outputs the resultant expression.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">negate' ::</span> (<span class="dt">Num</span> a) <span class="ot">=&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a
+negate' (<span class="dt">Var</span> c)    <span class="fu">=</span> (<span class="dt">Const</span> (<span class="fu">-</span><span class="dv">1</span>)) <span class="fu">:*:</span> (<span class="dt">Var</span> c)
+negate' (<span class="dt">Const</span> a)  <span class="fu">=</span> <span class="dt">Const</span> (<span class="fu">-</span>a)
+negate' (a <span class="fu">:+:</span> b)  <span class="fu">=</span> (negate' a) <span class="fu">:+:</span> (negate' b)
+negate' (a <span class="fu">:*:</span> b)  <span class="fu">=</span> (negate' a) <span class="fu">:*:</span> b
+negate' (a <span class="fu">:^:</span> b)  <span class="fu">=</span> <span class="dt">Const</span> (<span class="fu">-</span><span class="dv">1</span>) <span class="fu">:*:</span> a <span class="fu">:^:</span> b
+negate' (a <span class="fu">:/:</span> b)  <span class="fu">=</span> (negate' a) <span class="fu">:/:</span> b</code></pre>
+<p>Now we have a relatively robust system for computing symbolic expressions. However, we aren’t able to actually plug anything into these expressions yet, so we’ll fix that now.</p>
+<p><em>*Thanks to <a href="http://reddit.com/u/zoells">/u/zoells</a> for the suggestion!</em></p>
+<h4 id="evaluating-expressions">Evaluating Expressions</h4>
+<p>The first thing we’ll need to do to begin the process of evaluating expressions is write a function to plug in a value for a specific variable. We do this in terms of a function called <code>mapVar</code>, implemented as follows:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">mapVar ::</span> (<span class="dt">Char</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> a) <span class="ot">=&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a
+mapVar f (<span class="dt">Var</span> d)   <span class="fu">=</span> f d
+mapVar _ (<span class="dt">Const</span> a) <span class="fu">=</span> <span class="dt">Const</span> a
+mapVar f (a <span class="fu">:+:</span> b) <span class="fu">=</span> (mapVar f a) <span class="fu">:+:</span> (mapVar f b)
+mapVar f (a <span class="fu">:*:</span> b) <span class="fu">=</span> (mapVar f a) <span class="fu">:*:</span> (mapVar f b)
+mapVar f (a <span class="fu">:^:</span> b) <span class="fu">=</span> (mapVar f a) <span class="fu">:^:</span> (mapVar f b)
+mapVar f (a <span class="fu">:/:</span> b) <span class="fu">=</span> (mapVar f a) <span class="fu">:/:</span> (mapVar f b)
+
+<span class="ot">plugIn ::</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a
+plugIn c val <span class="fu">=</span> mapVar (\x <span class="ot">-&gt;</span> <span class="kw">if</span> x <span class="fu">==</span> c <span class="kw">then</span> <span class="dt">Const</span> val <span class="kw">else</span> <span class="dt">Var</span> x)</code></pre>
+<p><code>mapVar</code> searches through an expression for a specific variable and performs a function on each instance of that variable in the function. plugIn takes a character and a value, and is defined using <code>mapVar</code> to map variables with a specific name to a constant provided by the user. Now that we have <code>plugIn</code>, we can define two functions: One that takes an expression full of only constants and outputs a result (<code>evalExpr'</code>), and one that will replace a single variable with a constant and output the result (<code>evalExpr</code>):</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">evalExpr ::</span> (<span class="dt">Num</span> a, <span class="dt">Floating</span> a) <span class="ot">=&gt;</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> a
+evalExpr c x <span class="fu">=</span> evalExpr' <span class="fu">.</span> plugIn c x 
+
+<span class="ot">evalExpr' ::</span> (<span class="dt">Num</span> a, <span class="dt">Floating</span> a) <span class="ot">=&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> a
+evalExpr' (<span class="dt">Const</span> a) <span class="fu">=</span> a
+evalExpr' (<span class="dt">Var</span>   c) <span class="fu">=</span> error <span class="fu">$</span> <span class="st">&quot;Variables (&quot;</span>
+                              <span class="fu">++</span> [c] <span class="fu">++</span> 
+                              <span class="st">&quot;) still exist in formula. Try plugging in a value!&quot;</span>
+evalExpr' (a <span class="fu">:+:</span> b) <span class="fu">=</span> (evalExpr' a) <span class="fu">+</span> (evalExpr' b)
+evalExpr' (a <span class="fu">:*:</span> b) <span class="fu">=</span> (evalExpr' a) <span class="fu">*</span> (evalExpr' b)
+evalExpr' (a <span class="fu">:^:</span> b) <span class="fu">=</span> (evalExpr' a) <span class="fu">**</span> (evalExpr' b)
+evalExpr' (a <span class="fu">:/:</span> b) <span class="fu">=</span> (evalExpr' a) <span class="fu">/</span> (evalExpr' b)</code></pre>
+<p>What we’re doing here is simple. With <code>evalExpr'</code>, we only need to replace our functional types (<code>:+:</code>, <code>:*:</code>, etc) with the actual functions (<code>+</code>, <code>*</code>, etc). When we run into a <code>Const</code>, we simply replace it with it’s inner number value. When we run into a <code>Var</code>, we note that it’s not possible to evaluate, and tell the user that there is still a variable in the expression that needs to be plugged in. With evalExpr, we just plug in a value for a specific variable before evaluating the expression. Simple as that! Here are some examples of expressions and their evaluations:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> evalExpr <span class="ch">'x'</span> <span class="dv">2</span> (<span class="dt">Var</span> <span class="ch">'x'</span>) 
+<span class="fu">&gt;</span> <span class="dv">2</span><span class="fu">.</span><span class="dv">0</span> 
+<span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> evalExpr <span class="ch">'a'</span> <span class="dv">3</span> (<span class="dt">Const</span> <span class="dv">3</span><span class="fu">:+:</span> <span class="dt">Var</span> <span class="ch">'a'</span> <span class="fu">:*:</span> <span class="dt">Const</span> <span class="dv">6</span>)
+<span class="fu">&gt;</span>  <span class="dv">21</span><span class="fu">.</span><span class="dv">0</span> 
+<span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> evalExpr <span class="ch">'b'</span> <span class="dv">2</span> (<span class="dt">Var</span> <span class="ch">'b'</span> <span class="fu">:/:</span> (<span class="dt">Const</span> <span class="dv">2</span> <span class="fu">:*:</span> <span class="dt">Var</span> <span class="ch">'b'</span>)) 
+<span class="fu">&gt;</span> <span class="dv">0</span><span class="fu">.</span><span class="dv">5</span> </code></pre>
+<p>We can even evaluate multivariate expressions using <code>plugIn</code>:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> evalExpr' <span class="fu">.</span> plugIn <span class="ch">'x'</span> <span class="dv">1</span> <span class="fu">$</span> plugIn <span class="ch">'y'</span> <span class="dv">2</span> (<span class="dt">Var</span> <span class="ch">'x'</span> <span class="fu">:+:</span> <span class="dt">Var</span> <span class="ch">'y'</span>) 
+<span class="fu">&gt;</span> <span class="dv">3</span><span class="fu">.</span><span class="dv">0</span> </code></pre>
+<p>Now that we’ve extended our symbolic expressions to be able to be evaluated, let’s do what we set out to do – find derivatives!</p>
+<h4 id="derivatives">Derivatives</h4>
+<p>We aren’t going to get into super-complicated derivatives involving logorithmic or implicit differentiation, etc. Instead, we’ll keep it simple for now, and only adhere to some of the ‘simple’ derivative rules. We’ll need one of them for each of our six expression types: constants, variables, addition, multiplication, division, and exponentiation. We already know the following laws for these from calculus:</p>
+<table>
+<tbody>
+<tr class="odd">
+<td align="left">Differentiation of a constant</td>
+<td align="right"><span class="math">\(\frac{d}{dx}k = 0\)</span></td>
+</tr>
+<tr class="even">
+<td align="left">Differentiation of a variable</td>
+<td align="right"><span class="math">\(\frac{d}{dx}x = 1\)</span></td>
+</tr>
+<tr class="odd">
+<td align="left">Addition differentiation</td>
+<td align="right"><span class="math">\(\frac{d}{dx}\left(f(x) + g(x)\right) = \frac{d}{dx}f(x) +\frac{d}{dx}g(x)\)</span></td>
+</tr>
+<tr class="even">
+<td align="left">Power rule (/chain rule)</td>
+<td align="right"><span class="math">\(\frac{d}{dx}f(x)^n = nf(x)^{n-1} \cdot \frac{d}{dx}f(x)\)</span></td>
+</tr>
+<tr class="odd">
+<td align="left">Product rule</td>
+<td align="right"><span class="math">\(\frac{d}{dx}\left(f(x) \cdot g(x)\right) = \frac{d}{dx}f(x) \cdot g(x) + f(x) \cdot \frac{d}{dx}g(x)\)</span></td>
+</tr>
+<tr class="even">
+<td align="left">Quotient rule</td>
+<td align="right"><span class="math">\(\frac{d}{dx}\frac{f(x)}{g(x)} = \frac{\frac{d}{dx}f(x) \cdot g(x) - \frac{d}{dx}g(x) \cdot f(x)}{g(x)^2}\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>As it turns out, we can almost directly represent this in Haskell. There should be no surprises here – following along with the above rules, it is relatively easy to see how this function calculates derivatives. We will still error out if we get something like <span class="math">\(x^x\)</span> as input, as it will require a technique we haven’t implemented yet. However, this will suffice for a many different expressions.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">derivative ::</span> (<span class="dt">Num</span> a) <span class="ot">=&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a
+derivative (<span class="dt">Var</span> c)           <span class="fu">=</span> <span class="dt">Const</span> <span class="dv">1</span>
+derivative (<span class="dt">Const</span> x)         <span class="fu">=</span> <span class="dt">Const</span> <span class="dv">0</span>
+
+<span class="co">--product rule (ab' + a'b)</span>
+derivative (a <span class="fu">:*:</span> b)         <span class="fu">=</span> (a <span class="fu">:*:</span> (derivative b)) <span class="fu">:+:</span>  (b <span class="fu">:*:</span> (derivative a)) <span class="co">-- product rule</span>
+
+ <span class="co">--power rule (xa^(x-1) * a')</span>
+derivative (a <span class="fu">:^:</span> (<span class="dt">Const</span> x)) <span class="fu">=</span> ((<span class="dt">Const</span> x) <span class="fu">:*:</span> (a <span class="fu">:^:</span> (<span class="dt">Const</span> <span class="fu">$</span> x<span class="fu">-</span><span class="dv">1</span>))) <span class="fu">:*:</span> (derivative a)
+derivative (a <span class="fu">:+:</span> b)         <span class="fu">=</span> (derivative a) <span class="fu">:+:</span> (derivative b)
+
+ <span class="co">-- quotient rule ( (a'b - b'a) / b^2 )</span>
+derivative (a <span class="fu">:/:</span> b)         <span class="fu">=</span> ((derivative a <span class="fu">:*:</span> b) <span class="fu">:+:</span> (negate' (derivative b <span class="fu">:*:</span> a))) 
+                               <span class="fu">:/:</span> 
+                               (b <span class="fu">:^:</span> (<span class="dt">Const</span> <span class="dv">2</span>))
+derivative expr              <span class="fu">=</span> error <span class="st">&quot;I'm not a part of your system!&quot;</span> <span class="co">-- unsupported operation</span>
+
+<span class="ot">ddx ::</span> (<span class="dt">Floating</span> a, <span class="dt">Eq</span> a) <span class="ot">=&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a
+ddx <span class="fu">=</span> fullSimplify <span class="fu">.</span> derivative  
+
+<span class="ot">ddxs ::</span> (<span class="dt">Floating</span> a, <span class="dt">Eq</span> a) <span class="ot">=&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> [<span class="dt">Expr</span> a]
+ddxs <span class="fu">=</span> iterate ddx
+
+<span class="ot">nthDerivative ::</span> (<span class="dt">Floating</span> a, <span class="dt">Eq</span> a) <span class="ot">=&gt;</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> <span class="dt">Expr</span> a
+nthDerivative n <span class="fu">=</span> foldr1 (<span class="fu">.</span>) (replicate n ddx)</code></pre>
+<p>So, what can we do with this? Well, let’s take a look:</p>
+<p>The first, most obvious thing we’ll note when running the derivative function on an expression is that what it produces is rather ugly. To fix this, we’ll write a function ddx that will simplify the derivative expression three times to make our output cleaner. (Remember <code>sampleExpr</code> = <span class="math">\(3x^2\)</span>)</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> derivative sampleExpr 
+<span class="fu">&gt;</span> <span class="dt">Const</span> <span class="dv">3</span><span class="fu">.</span><span class="dv">0</span> <span class="fu">:*:</span> ((<span class="dt">Const</span> <span class="dv">2</span><span class="fu">.</span><span class="dv">0</span> <span class="fu">:*:</span> <span class="dt">Var</span> <span class="ch">'x'</span> <span class="fu">:^:</span> <span class="dt">Const</span> <span class="dv">1</span><span class="fu">.</span><span class="dv">0</span>) <span class="fu">:*:</span> <span class="dt">Const</span> <span class="dv">1</span><span class="fu">.</span><span class="dv">0</span>) <span class="fu">:+:</span> <span class="dt">Var</span> <span class="ch">'x'</span> <span class="fu">:^:</span> <span class="dt">Const</span> <span class="dv">2</span><span class="fu">.</span><span class="dv">0</span>
+<span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> ddx sampleExpr 
+<span class="fu">&gt;</span> <span class="dt">Const</span> <span class="dv">6</span><span class="fu">.</span><span class="dv">0</span> <span class="fu">:*:</span> <span class="dt">Var</span> <span class="ch">'x'</span> <span class="co">-- 6x</span></code></pre>
+<p>Another thing we can do is get a list of derivatives. The <code>iterate</code> method from the <code>Prelude</code> suits this type of thing perfectly – we can generate a (infinite!) list of derivatives of a function just by calling <code>iterate ddx</code>. Simple, expressive, and incredibly powerful.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> take <span class="dv">3</span> <span class="fu">$</span> ddxs
+sampleExpr [<span class="dt">Const</span> <span class="dv">3</span><span class="fu">.</span><span class="dv">0</span> <span class="fu">:*:</span> <span class="dt">Var</span> <span class="ch">'x'</span> <span class="fu">:</span>\<span class="fu">^:</span> <span class="dt">Const</span> <span class="dv">2</span><span class="fu">.</span><span class="dv">0</span>,<span class="dt">Const</span> <span class="dv">6</span><span class="fu">.</span><span class="dv">0</span> <span class="fu">:*:</span> <span class="dt">Var</span> <span class="ch">'x'</span>,<span class="dt">Const</span> <span class="dv">6</span><span class="fu">.</span><span class="dv">0</span>] <span class="co">-- [3x\^2, 6x, 6] </span>
+<span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> <span class="kw">let</span> ds <span class="fu">=</span> take <span class="dv">4</span> <span class="fu">$</span> ddxs sampleExpr
+<span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> fmap (evalExpr <span class="ch">'x'</span> <span class="dv">2</span>) ds 
+<span class="fu">&gt;</span> [<span class="dv">12</span><span class="fu">.</span><span class="dv">0</span>,<span class="dv">12</span><span class="fu">.</span><span class="dv">0</span>,<span class="dv">6</span><span class="fu">.</span><span class="dv">0</span>,<span class="dv">0</span><span class="fu">.</span><span class="dv">0</span>] </code></pre>
+<p>We’re also able to grab the <span class="math">\(n^{th}\)</span> derivative of an expression. We could simply grab the <span class="math">\(n^{th}\)</span> term of <code>ddxs</code>, but we’ll do it without the wasted memory by repeatedly composing <code>ddx</code> <span class="math">\(n\)</span> times using <code>foldr1</code> and <code>replicate</code>.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> nthDerivative <span class="dv">2</span> sampleExpr 
+<span class="fu">&gt;</span> <span class="dt">Const</span> <span class="dv">6</span><span class="fu">.</span><span class="dv">0</span></code></pre>
+<p>There’s one last thing I want to touch on. Since it’s so simple to generate a list of derivatives of a function, why not use that to build functions’ Taylor series expansions?</p>
+<h4 id="taylor-series-expansions">Taylor Series Expansions</h4>
+<p>The Taylor series expansion of a function <span class="math">\(f(x)\)</span> about <span class="math">\(a\)</span> is defined as follows: <span class="math">\[ \sum{n=1}^{\infty} \frac{f^{(n)}(a)}{n!} \cdot (x -
+a)^n \]</span> The Maclaurin series expansion for a function is the Taylor series of a function with a = 0, and we will also implement that. Given that we can:</p>
+<ol style="list-style-type: decimal">
+<li>Have multivariate expressions</li>
+<li>Easily generate a list of derivatives</li>
+</ol>
+<p>We can actually find the Taylor series expansion of a function easily. Again, we can almost directly implement this function in Haskell, and evaluating it is no more difficult.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">taylor ::</span> (<span class="dt">Floating</span> a, <span class="dt">Eq</span> a) <span class="ot">=&gt;</span> <span class="dt">Expr</span> a <span class="ot">-&gt;</span> [<span class="dt">Expr</span> a]
+taylor expr <span class="fu">=</span> fmap fullSimplify (fmap series exprs)
+  <span class="kw">where</span> indices <span class="fu">=</span> fmap fromIntegral [<span class="dv">1</span><span class="fu">..</span>]
+        derivs  <span class="fu">=</span> fmap (changeVars <span class="ch">'a'</span>) (ddxs expr)
+          <span class="kw">where</span> changeVars c <span class="fu">=</span> mapVar (\_ <span class="ot">-&gt;</span> <span class="dt">Var</span> c)
+        facts   <span class="fu">=</span> fmap <span class="dt">Const</span> <span class="fu">$</span> scanl1 (<span class="fu">*</span>) indices
+        exprs   <span class="fu">=</span> zip (zipWith (<span class="fu">:/:</span>) derivs facts) indices <span class="co">-- f^(n)(a)/n!</span>
+        series (expr, n) <span class="fu">=</span> 
+          expr <span class="fu">:*:</span> ((<span class="dt">Var</span> <span class="ch">'x'</span> <span class="fu">:+:</span> (negate' <span class="fu">$</span> <span class="dt">Var</span> <span class="ch">'a'</span>)) <span class="fu">:^:</span> <span class="dt">Const</span> n) <span class="co">-- f^(n)(a)/n! * (x - a)^n</span>
+
+maclaurin <span class="fu">=</span> fmap (fullSimplify <span class="fu">.</span> plugIn <span class="ch">'a'</span> <span class="dv">0</span>) <span class="fu">.</span> taylor 
+
+evalTaylorWithPrecision a x prec <span class="fu">=</span>  
+  sum <span class="fu">.</span> map (evalExpr' <span class="fu">.</span> plugIn <span class="ch">'x'</span> x <span class="fu">.</span> plugIn <span class="ch">'a'</span> a) <span class="fu">.</span> take prec <span class="fu">.</span> taylor
+
+evalTaylor a x <span class="fu">=</span> evalTaylorWithPrecision a x <span class="dv">100</span>
+        
+evalMaclaurin <span class="fu">=</span> evalTaylor <span class="dv">0</span>
+evalMacLaurinWithPrecision <span class="fu">=</span> evalTaylorWithPrecision <span class="dv">0</span></code></pre>
+<p>To produce a Taylor series, we need a couple of things:</p>
+<ul>
+<li>A list of derivatives</li>
+<li>A list of indices</li>
+<li>A list of factorials</li>
+</ul>
+<p>We create these three things in where clauses in the taylor declaration. indices are simple, <code>derivs</code> calculates a list of derivatives (using <code>mapVar</code> again to change all variables into <span class="math">\(a\)</span>s), and <code>facts</code> contains our factorials wrapped in <code>Const</code>s. We generate a list of <code>(expression, index)</code>s in <code>exprs</code>, and then map the “gluing” function <code>series</code> over <code>exprs</code> to produce a list of expressions in the series expansion. We then <code>fmap superSimplify</code> over the list in order to simplify down our expressions, and we get back a list of Taylor series terms for the given expression. The Maclaurin expansion can be defined as mentioned above in terms of the Taylor series, and again, we basically directly encode it (though we do have to re-simplify our expressions due to the plugging in of a variable). Let’s take a look at the Taylor expansion for <span class="math">\(f(x) = x\)</span>. We note that: <span class="math">\(f(a) = a\)</span>, <span class="math">\(f'(a) = 1\)</span>, <span class="math">\(f''(a) = 0\)</span>, and the rest of the derivatives will be 0. So our Taylor series terms <span class="math">\(T_n\)</span> should look something like: <span class="math">\(T_1 = \frac{a}{1} \cdot (x - a) = a \cdot (x-a)\)</span> <span class="math">\(T_2 = \frac{1}{2} \cdot (x-a)^2\)</span> <span class="math">\(T_3 = \frac{0}{6} \cdot (x-a)^3 = 0\)</span> …and so on. Let’s take a look at what <code>taylor</code> produces:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> take <span class="dv">3</span> <span class="fu">$</span> taylor (<span class="dt">Var</span> <span class="ch">'x'</span>) 
+<span class="fu">&gt;</span> [<span class="dt">Var</span> <span class="ch">'a'</span> <span class="fu">:*:</span> (<span class="dt">Var</span> <span class="ch">'x'</span> <span class="fu">:+:</span> <span class="dt">Const</span> (<span class="fu">-</span><span class="dv">1</span><span class="fu">.</span><span class="dv">0</span>) <span class="fu">:*:</span> <span class="dt">Var</span> <span class="ch">'a'</span>), 
+<span class="fu">--^</span> a <span class="fu">*</span> (x<span class="fu">-</span>a) 
+(<span class="dt">Const</span> <span class="dv">1</span><span class="fu">.</span><span class="dv">0</span> <span class="fu">:/:</span> <span class="dt">Const</span> <span class="dv">2</span><span class="fu">.</span><span class="dv">0</span>) <span class="fu">:*:</span> (<span class="dt">Var</span> <span class="ch">'x'</span> <span class="fu">:+:</span> <span class="dt">Const</span> (<span class="fu">-</span><span class="dv">1</span><span class="fu">.</span><span class="dv">0</span>) <span class="fu">:*:</span> <span class="dt">Var</span> <span class="ch">'a'</span>) <span class="fu">:^:</span> <span class="dt">Const</span> <span class="dv">2</span><span class="fu">.</span><span class="dv">0</span>, 
+<span class="fu">--^</span> <span class="dv">1</span><span class="fu">/</span><span class="dv">2</span> <span class="fu">*</span> (x<span class="fu">-</span>a)<span class="fu">^</span><span class="dv">2</span> 
+<span class="dt">Const</span> <span class="dv">0</span><span class="fu">.</span><span class="dv">0</span>] </code></pre>
+<p>This matches what we determined earlier. To evaluate a Taylor expression, we need a value for <span class="math">\(a\)</span>, a value for <span class="math">\(x\)</span>, and a specified number of terms for precision. We default this precision to 100 terms in the <code>evalTaylor</code> function, and the logic takes place in the <code>evalTaylorWithPrecision</code> function. In this function, we get the Taylor expansion, take the first <code>prec</code> terms, plug in <code>a</code> and <code>x</code> for all values of the function, and finally sum the terms. Maclaurin evaluation is again defined in terms of Taylor evaluation.</p>
+<p>Taking a look at the above Taylor series expansion of <span class="math">\(f(x) = x\)</span>, there is only one term where a zero-valued <span class="math">\(a\)</span> will produce any output (namely <span class="math">\(\frac{1}{2} \cdot (x-a)^2\)</span>). So when we evaluate our Maclaurin series for this function at x, we should simply get back <span class="math">\(\frac{1}{2}x^2\)</span>. Let’s see how it works:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> evalMaclaurin <span class="dv">2</span> (<span class="dt">Var</span> <span class="ch">'x'</span>) 
+<span class="fu">&gt;</span> <span class="dv">2</span><span class="fu">.</span><span class="dv">0</span> <span class="co">--1/2 2\^2 = 1/2 * 4 = 2 </span>
+<span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> evalMaclaurin <span class="dv">3</span> (<span class="dt">Var</span> <span class="ch">'x'</span>) 
+<span class="fu">&gt;</span> <span class="dv">4</span><span class="fu">.</span><span class="dv">5</span> <span class="co">-- 1/2 * 3^2 = 1/2 * 9 = 4.5 </span>
+<span class="fu">*</span><span class="dt">Main</span><span class="fu">&gt;</span> evalMaclaurin <span class="dv">10</span> (<span class="dt">Var</span> <span class="ch">'x'</span>) 
+<span class="fu">&gt;</span> <span class="dv">50</span><span class="fu">.</span><span class="dv">0</span> <span class="co">-- 1/2 * 10^2 = 1/2 * 100 = 50 </span></code></pre>
+<p>Until next time,</p>
+<p>Ben</p>
+</div>
+
+	    	<a class="disqus_link" href="./posts/2013-05-01-symbolic-calculus.html#disqus_thread"></a>
+    	</li>
+    
+</ul>
+<p style="text-align:right; font-weight:bold">Looking for an older post? <a href="archive.html">Check out the archive</a>.</p>
+            </div>
+    <footer>
+        <p id="copyright">© Benjamin Kovach, 2013 <br />
+                          Follow me on <a href="http://github.com/5outh">GitHub</a> and <a href="http://twitter.com/bendotk">Twitter</a>!
+                          </p>
+    </footer>
+    <script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+    var disqus_shortname = 'abstract-nonsense'; // required: replace example with your forum shortname
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function () {
+        var s = document.createElement('script'); s.async = true;
+        s.type = 'text/javascript';
+        s.src = '//' + disqus_shortname + '.disqus.com/count.js';
+        (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
+    }());
+    </script>
+    
+    </body>     
+</html>
