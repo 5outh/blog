@@ -1,10 +1,11 @@
 html{
     font-family:sans-serif;
     font-size: 14px;
-    background: -webkit-linear-gradient(#111, #444); /* For Safari */
-    background: -o-linear-gradient(#111, #44); /* For Opera 11.1 to 12.0 */
-    background: -moz-linear-gradient(#111, #444); /* For Firefox 3.6 to 15 */
-    background: linear-gradient(#111, #444); /* Standard syntax */
+    background: #CDF;
+    /*background: -webkit-linear-gradient(#111, #444); /* For Safari */
+    /*background: -o-linear-gradient(#111, #44); /* For Opera 11.1 to 12.0 */
+    /*background: -moz-linear-gradient(#111, #444); /* For Firefox 3.6 to 15 */
+    /*background: linear-gradient(#111, #444); /* Standard syntax */
 }
 
 p{
@@ -34,9 +35,9 @@ body {
     margin: 0px auto 0px auto;
     padding:0;
     width: 800px;
-    background-color:#FDFDFD;
-    border-left:10px solid #123;
-    border-right:10px solid #123;
+    background-color:#F9F9F9;
+    border-left:10px solid #FA5;
+    border-right:10px solid #FA5;
 }
 
 div#content{
@@ -47,11 +48,7 @@ div#header {
     margin-bottom: 30px;
     padding: 12px 10px 12px 10px;
     height:40px;
-    background-color: #EEE;
-    background: -webkit-linear-gradient(#CCC, #FDFDFD); /* For Safari */
-    background: -o-linear-gradient(#CCC, #FDFDFD); /* For Opera 11.1 to 12.0 */
-    background: -moz-linear-gradient(#CCC, #FDFDFD); /* For Firefox 3.6 to 15 */
-    background: linear-gradient(#CCC, #FDFDFD); /* Standard syntax */
+    background-color: #F9F9F9;
 }
 
 div#logo a {
@@ -89,7 +86,7 @@ footer{
     text-align: right;
     height: 60px;
     line-height:4px;
-    background-color:#FDFDFD;
+    background-color:#F9F9F9;
     position:relative;
 }
 
@@ -152,7 +149,7 @@ h3.subtitle{
 }
 
 h4{
-    border-left: 4px solid #55A;
+    border-left: 4px solid #9AF;
     padding-left: 10px;
     margin-left: -16px;
     font-size: 20px;
@@ -247,13 +244,13 @@ a.post_title{
     text-align:center;
     text-transform:capitalize;
     text-decoration:none;
-    color: #FFF;
+    color: #000;
     border-left: 50px solid transparent;
     border-right: 10px solid transparent;
     border-bottom: 2px solid transparent;
     border-top: 2px solid transparent;
     margin-left: -50px;
-    background:#123;
+    background:#FA5;
     font-family: 'Montaga', serif;
     font-weight: normal;
 }
