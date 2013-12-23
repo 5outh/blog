@@ -1,7 +1,7 @@
 html{
     font-family:sans-serif;
     font-size: 14px;
-    background: #CDF;
+    background: #707079;
     /*background: -webkit-linear-gradient(#111, #444); /* For Safari */
     /*background: -o-linear-gradient(#111, #44); /* For Opera 11.1 to 12.0 */
     /*background: -moz-linear-gradient(#111, #444); /* For Firefox 3.6 to 15 */
@@ -36,8 +36,24 @@ body {
     padding:0;
     width: 800px;
     background-color:#F9F9F9;
-    border-left:10px solid #FA5;
-    border-right:10px solid #FA5;
+    border-left:5px solid #F5C090;
+    border-right:5px solid #F5C090;
+}
+
+a.post_title{
+    font-size:22px;
+    text-align:center;
+    text-transform:capitalize;
+    text-decoration:none;
+    color: #000;
+    border-left: 50px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 2px solid transparent;
+    border-top: 2px solid transparent;
+    margin-left: -50px;
+    background: #F5C090;
+    font-family: 'Montaga', serif;
+    font-weight: normal;
 }
 
 div#content{
@@ -149,12 +165,14 @@ h3.subtitle{
 }
 
 h4{
-    border-left: 4px solid #9AF;
+    /*border-left: 4px solid #9AF; */
     padding-left: 10px;
     margin-left: -16px;
     font-size: 20px;
     font-weight: normal;
     font-family: 'Alegreya Sans SC', sans-serif;
+    text-decoration: underline;
+    text-align:center;
 }
 h4>a{
     color: black;
@@ -237,22 +255,6 @@ div.info {
 .post_header>p{
     line-height: 10px;
     font-size:12px;
-}
-
-a.post_title{
-    font-size:22px;
-    text-align:center;
-    text-transform:capitalize;
-    text-decoration:none;
-    color: #000;
-    border-left: 50px solid transparent;
-    border-right: 10px solid transparent;
-    border-bottom: 2px solid transparent;
-    border-top: 2px solid transparent;
-    margin-left: -50px;
-    background:#FA5;
-    font-family: 'Montaga', serif;
-    font-weight: normal;
 }
 
 .separator{
