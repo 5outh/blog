@@ -34,6 +34,7 @@ body {
     background-color:#F9F9F9;
     border-left:5px solid #F5C090;
     border-right:5px solid #F5C090;
+    border-bottom:5px solid #F5C090;
 }
 
 a.post_title{
