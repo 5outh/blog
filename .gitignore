@@ -1,8 +1,4 @@
 *.hi
 *.o
-<<<<<<< HEAD
-*.sh
-/5outh.github.io
-=======
-/_cache
-_cache
+_cache/
+
