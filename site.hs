@@ -57,6 +57,10 @@ main = hakyll $ do
             >>= loadAndApplyTemplate "templates/default.html" defaultContext
             >>= relativizeUrls
 
+    match "4Space.html" $ do
+      route idRoute
+      compile copyFileCompiler
+
     {- Single Posts -}
     match "posts/*" $ do
         route $ setExtension "html"
