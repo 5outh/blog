@@ -57,7 +57,7 @@ main = hakyll $ do
             >>= loadAndApplyTemplate "templates/default.html" defaultContext
             >>= relativizeUrls
 
-    match "4Space.html" $ do
+    match (fromList ["4Space.html", "What-the-Haskell.pdf"]) $ do
       route idRoute
       compile copyFileCompiler
 
@@ -107,7 +107,7 @@ main = hakyll $ do
 postCtx :: Tags -> Context String
 postCtx tags =
     dateField "date" "%B %e, %Y" <>
-    tagsField "tags" tags       <>
+    tagsField "tags" tags        <>
     defaultContext
 
 postCtxNoTags :: Context String
