@@ -35,11 +35,63 @@
     
     	<li>
 	    	<div class="post_header">
+	<a class="post_title" href="./posts/2014-04-30-hylomorphisms-and-treesort.html">Hylomorphisms and treesort</a>
+	<p class="published">Published by Ben Kovach on April 30, 2014</p>
+</div>
+<div class="post_body">
+	<p>Consider the following data structure, representing a binary search tree:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span>  <span class="dt">BST</span> a <span class="fu">=</span> 
+    <span class="dt">Tree</span> (<span class="dt">BST</span> a) a (<span class="dt">BST</span> a)
+  <span class="fu">|</span> <span class="dt">Empty</span> <span class="kw">deriving</span> (<span class="dt">Eq</span>)</code></pre>
+<p>As it turns out, this data structure provides a nice way to introduce the concepts of different types of morphisms used all over the place in Haskell - the fold, or “catamorphism”, the unfold, or “anamorphism”, and compositions of the two, the “hylomorphism” and “metamorphism.”</p>
+<p>The bracket notations that I’ll use below come from Meijer, Fokkinga and Patterson’s excellent paper <a href="http://eprints.eemcs.utwente.nl/7281/01/db-utwente-40501F46.pdf">Functional Programming with Bananas, Lenses, Envelopes and Barbed Wire</a>. If you enjoy the article, I’d suggest giving it a look!</p>
+<p>I’m writing this because I recall encountering these names when learning Haskell early on and being very confused, particularly by the latter two types. Folds (and to a lesser extent, unfolds) are commonplace in Haskell. Hylo- and metamorphisms are also pretty common, but they’re not as easy to spot. From <a href="http://en.wikipedia.org/wiki/Hylomorphism_(computer_science)">Wikipedia</a>:</p>
+<blockquote>
+<p>In computer science, and in particular functional programming, a hylomorphism is a recursive function, corresponding to the composition of an anamorphism (which first builds a set of results; also known as ‘unfolding’) and a catamorphism (which then folds these results into a final return value)</p>
+</blockquote>
+<p>The canonical example of a hylomorphism is the factorial function, which (usually) implicitly composes functions. The goal of this post is to lay out an <strong>explicit</strong> example of a hylo- (and meta-) morphism in a natural way. We’ll start with a couple of functions:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">insert ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">BST</span> a <span class="ot">-&gt;</span> <span class="dt">BST</span> a
+insert x <span class="dt">Empty</span> <span class="fu">=</span> <span class="dt">Tree</span> <span class="dt">Empty</span> x <span class="dt">Empty</span>
+insert x (<span class="dt">Tree</span> left a right)
+  <span class="fu">|</span> x <span class="fu">&lt;</span> a     <span class="fu">=</span> <span class="dt">Tree</span> (treeInsert x left) a right
+  <span class="fu">|</span> otherwise <span class="fu">=</span> <span class="dt">Tree</span> left a (treeInsert x right)
+
+<span class="ot">fromList ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> [a] <span class="ot">-&gt;</span> <span class="dt">BST</span> a
+fromList xs <span class="fu">=</span> foldr treeInsert <span class="dt">Empty</span> xs</code></pre>
+<p>We have an insertion function and our first example of a catamorphism, <code>fromList</code>! We’re folding all values from a list into a new structure (a <code>BST</code>) and destroying the list in the process. This function can be written in so called “banana brackets,” like so: <span class="math">\(fromList = (\!\left|treeInsert\right|\!)\)</span>.</p>
+<p>I<code>fromList</code> can also be considered an anamorphism. Catamorphisms destroy structures to build final values, whereas anamorphisms take an initial seed value and build a new structure from it. In <code>fromList</code>, <code>xs</code> can be considered a “seed” value to build a <code>BST a</code> from, making <code>fromList</code> a perfectly valid anamorphism as well. As such, <code>fromList</code> can also be written in “lens brackets”: <span class="math">\(fromList = [\!(treeInsert)\!]\)</span>.</p>
+<p>We can also define a new pair of cata/anamorphisms by folding the tree into a list:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">foldTree ::</span> (a <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> b) <span class="ot">-&gt;</span> b <span class="ot">-&gt;</span> <span class="dt">BST</span> a <span class="ot">-&gt;</span> b
+foldTree f b <span class="dt">Empty</span> <span class="fu">=</span> b
+foldTree f b (<span class="dt">Tree</span> left a right) <span class="fu">=</span> foldTree f ( f a (foldTree f b right) ) left
+
+<span class="ot">toList ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> <span class="dt">BST</span> a <span class="ot">-&gt;</span> [a]
+toList t <span class="fu">=</span> foldTree (<span class="fu">:</span>) [] t</code></pre>
+<p><code>foldTree</code> is analogous to <code>foldr</code> (and would be a fine definition for <code>foldr</code> in a <code>Foldable</code> instance), and <code>toList</code> destructs (folds) a <code>BST a</code> into an <code>[a]</code>. Thinking this way, <code>toList</code> again defines a catamorphism, this time from <code>BST a -&gt; [a]</code>, denoted <span class="math">\(toList = (\!\left| : \right|\!)\)</span>. But we can also think of <code>toList</code> as unfolding a <code>BST a</code> into an <code>[a]</code>, so we can analogously define an anamorphism <span class="math">\(toList = [\!( : )\!]\)</span>.</p>
+<p>There’s something interesting about <code>toList</code>: <code>foldTree</code> traverses a <code>BST</code> in order, so it actually produces a sorted list (given that elements are <code>insert</code>ed rather than randomly placed!). Now we have a way to construct a binary search tree from a list of elements, and destruct a binary search tree into a sorted list of elements. This gives rise to a simple definion of a sorting algorithm, namely:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">treesort ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> [a] <span class="ot">-&gt;</span> [a]
+treesort <span class="fu">=</span> toList <span class="fu">.</span> fromList</code></pre>
+<p>Because <code>toList</code> and <code>fromList</code> are both cata- and anamorphims, <code>treesort</code> actually defines a hylomorphism <em>and</em> a metamorphism.</p>
+<p>As we noted before, a hylomorphism is defined as the composition of an anamorphism (unfold) with a catamorphism (fold). If we think of <code>fromList</code> as an anamorphism and <code>toList</code> as a catamorphism, we have constructed a hylomorphism directly. Namely, the function <span class="math">\(treesort = [\![([], (:)),(insert, null)]\!]\)</span> (the brackets here are commonly called “envelopes”). <code>null</code> isn’t explicit in the definition of <code>treesort</code> (instead, it’s implicit in <code>foldr</code>), but it describes a terminating condition for <code>fromList</code>. Similarly, <code>[]</code> is just the container to fold values into.</p>
+<p>We can once again think of this function in the opposite manner by thinking of <code>fromList</code> as a catamorphism and <code>toList</code> as an anamorphism, giving rise to a metamorphism, defined by composition in the opposite direction. Metamorphisms (as far as I know) have no bracket notation in literature, but I want to mention that we do have a name for such things. My guess is that any metamorphism can actually be thought of as a hylomorphism, since the objects being operated on must be both foldable and unfoldable, but I don’t know for sure.</p>
+<p>Finally, note that we can also create another function:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">what ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> <span class="dt">BST</span> a <span class="ot">-&gt;</span> <span class="dt">BST</span> a
+what <span class="fu">=</span> fromList <span class="fu">.</span> toList</code></pre>
+<p>which is also a hylo- and metamorphism. However, this isn’t very useful (in fact, one might consider it counterproductive), but I’ll leave it as an exercise to the reader to figure out why.</p>
+<p>Thanks for reading!</p>
+<p>Ben</p>
+</div>
+
+	    	<a class="disqus_link" href="./posts/2014-04-30-hylomorphisms-and-treesort.html#disqus_thread"></a>
+    	</li>
+    
+    	<li>
+	    	<div class="post_header">
 	<a class="post_title" href="./posts/2014-04-19-What-the-Haskell-Code.html">What the Haskell!? Code</a>
 	<p class="published">Published by Ben Kovach on April 19, 2014</p>
 </div>
 <div class="post_body">
-	<p>I recently presented a talk at the UGA ACM, so I’ve posted the slides <a href="https://5outh.github.io/What-the-Haskell.pdf">here</a>. A completed copy of the code involved can also be found <a href="https://github.com/5outh/HaskellTalk">in a github repository here</a>.</p>
+	<p>I recently presented a talk for the UGA ACM, so I’ve posted the slides <a href="https://5outh.github.io/What-the-Haskell.pdf">here</a>. A completed copy of the code involved can also be found <a href="https://github.com/5outh/HaskellTalk">in a github repository here</a>.</p>
 <p>Ben</p>
 </div>
 
@@ -335,39 +387,6 @@ NOT (a OR b AND c) OR NOT(a AND NOT b) --- (a OR b AND c) AND (a AND NOT b)</cod
 </div>
 
 	    	<a class="disqus_link" href="./posts/2013-11-13-parsing-negating.html#disqus_thread"></a>
-    	</li>
-    
-    	<li>
-	    	<div class="post_header">
-	<a class="post_title" href="./posts/2013-08-27-ludum-dare.html">Ludum Dare 27: A Post-mortem</a>
-	<p class="published">Published by Ben Kovach on August 27, 2013</p>
-</div>
-<div class="post_body">
-	<h4 id="what-is-ludum-dare">What is Ludum Dare?</h4>
-<p><a href="http://www.ludumdare.com/compo/">Ludum Dare</a> is a friendly competition among game developers to see who can make the best game based on a given theme in 48 hours. This was the 27th competition, and the theme was “10 seconds.”</p>
-<h4 id="why-did-i-want-to-participate">Why did I want to participate?</h4>
-<p><img src="http://2.bp.blogspot.com/-C5uKdb6VMHA/Uh0CIyE4VOI/AAAAAAAAAHg/Ws8COqbSITA/s1600/25390-shot0.png" class="right" style="width:400px"></a> For a long time, I’ve been looking at the game development community from the outside with a lens that I feel a lot of people tend to see through. I’ve always considered game development an extremely intricate and difficult field to enter, and I was scared of trying my hand at it for a long time. I have made small clones of other games (pong, sokoban, etc) and I have enjoyed making those games, but they’re both relatively simple (exercise-sized, almost, to a certain extent). I have been wanting to get a little further into the game development scene for a while, and Ludum Dare seemed like the perfect opportunity. I’ve seen several Ludum Dare competitions go by over the past couple of years and I never thought I was good enough to actually do it. This time, I just went for it, and I’m really glad I did.</p>
-<h4 id="what-did-i-make">What did I make?</h4>
-<p>When the theme “10 seconds” was announced, I had a billion and one ideas going through my head, because it’s so open-ended. Everyone’s first idea was to make a 10-second game, but that doesn’t really work, so you had to move on to the next thing. I bounced a couple of ideas around in my head, but I ultimately decided to make a twin-stick roguelike-like because:</p>
-<ol style="list-style-type: decimal">
-<li>Movement and collision detection is relatively simple to implement, and</li>
-<li>As all of my friends know, I’m a big fan of <a href="http://en.wikipedia.org/wiki/The_Binding_of_Isaac_(video_game)">The Binding of Isaac</a>, and I’m always thinking about how that game and games similar in nature to it are put together.</li>
-</ol>
-<p>I ended up calling my game “Wappansai!” because it was one of the random strings I stuck in as a debug message as I was developing. It doesn’t mean anything other than that. Anyway, in Wappansai!, you’re a big fat square ninja man who is stuck in a dungeon with some red business-men enemies. They don’t move, but if you don’t murder all of the enemies in the room within <strong>10 seconds</strong>, you die. Running into enemies also kills you, as does falling into the many pits laid out around the room. Later on, moving spike tiles get added, and those kill you as well. When you clear a room under 10 seconds, a door opens up and you move on to the next room where things get progressively more difficult. I think my high score in the final version of the game was somewhere around 17 rooms, so I definitely challenge everyone to beat that! Oh, and the tools I used were C++ and SDL 2.0, sfxr for sound bytes, and photoshop for graphics. I didn’t get around to making music because I don’t even know where to start with that!</p>
-<h4 id="what-did-i-learn">What did I learn?</h4>
-<p>I have been reading <a href="http://www.amazon.com/Programming-Game-Example-Mat-Buckland/dp/1556220782">Programming Game AI by Example</a> on and off for a little while, and I decided to use Ludum Dare as an opportunity to start learning a little more about the <a href="http://en.wikipedia.org/wiki/State_pattern">State Design Pattern</a> and <a href="http://en.wikipedia.org/wiki/Singleton_pattern">Singletons</a>, two concepts introduced early on in that book. I worked on throwing together a shell of a program that implemented these things before the competition, so I wouldn’t have to figure everything out as I was trying to get things done over the 48 hours, which was definitely a good idea. I was able to start working right when the clock started ticking instead of worrying about getting the design right as I was trying to implement the program. I’d recommend doing this if you plan to participate in a game jam; it really helped me out. That said, there were still some design pitfalls. For example, when you open chests in the game, there’s a (very slim) chance that you’ll get a laser gun from inside of it (usually it just takes all of your currently held items – haha!), but the gun doesn’t spawn anywhere when this happens; it just magically goes into your character’s weapon slot and suddenly you’re firing lasers. The way I wanted this to work was, if you got lucky and got the laser gun from the chest, the gun would spawn somewhere on the map and you could go pick it up and feel awesome that that chest that normally screws you over by stealing all of your items just happened to spawn a freakin’ laser gun for you to play with. But, the way I organized my project, Tile objects had no way to modify Level objects, so I was unable to trigger an event when the chest (a type of Tile) was touched to modify the level (a Level), so I had to make a compromise there. There are certainly workarounds that I considered, but I couldn’t really do them within the time limit. It was a design flaw, and now I know that it was a design flaw. I can structure my code better now – that was one major learning point.</p>
-<p><img src="http://4.bp.blogspot.com/-d2Tcd-4PCiM/Uh0CI8r_h7I/AAAAAAAAAHc/NsQtn54CdGo/s400/25390-shot1.png" class="right"></a></p>
-<p>I also learned a lot about randomly generated content, that was crazy! It actually went a lot smoother than I thought it would, but just seeing everything so randomized was amazing. Items, weapons, enemies, pits, and walls all get generated randomly based on how many rooms you’ve traversed, and just seeing that in play working (relatively) nicely was so cool. So I learned a lot there. The final, really huge thing that I discovered was that…holy crap, there are a lot of assets that go into games! I must have made over 50 sprites for Wappansai!, on top of tons of different sound clips (sfxr made this easy). A lot more time went into art than I expected, and I didn’t even animate anything…you don’t really think about it, but games have tons and tons of assets involved.</p>
-<h4 id="would-i-do-it-again">Would I do it again?</h4>
-<p><img class="right" src="http://2.bp.blogspot.com/-D5-Ewsy8IWs/Uh0CI_MUg3I/AAAAAAAAAHY/TIYg51u7Xqc/s400/25390-shot2.png"></a></p>
-<p>Finishing a game in two days was really hard work and it could be really frustrating at times (especially using C++ with VS, those error messages are completely incomprehensible). But, it was totally worth the effort. I can say that I’ve made a game that is completely mine, and even though it’s not very good, it’s something that<em>I</em> made and I love that I made it and I’m excited to make more things. It’s also really amazing that people actually do play your games. I’ve had several comments on my ludum dare game’s page already discussing the game that <em>I</em> made, and it’s so cool to see that. Playing everyone else’s games is also really awesome because you know that they went through the same thing that you did. Everyone’s really proud of their work, everyone worked hard to get something done, and it’s just a really nice community event that I’m so happy to have been a part of. I would absolutely do it again, and plan to!</p>
-<h4 id="who-would-i-recommend-ludum-dare-to">Who would I recommend Ludum Dare to?</h4>
-<p>If you want to make games, do it. If you don’t know where to start, there are plenty of websites that can teach you the basics, and even if you don’t want/ know how to program, there are tools out there like <a href="http://www.yoyogames.com/gamemaker/studio">GameMaker Studio</a> that will allow you to program your game’s logic without actually writing code. If you don’t think you can do it alone, team up with someone. But if you want to make video games and have at least a basic knowledge of how they work, I think that Ludum Dare is an excellent way to test your skills and build something that you’ll be proud of.</p>
-<h4 id="where-can-you-download-my-game">Where can you download my game?</h4>
-<p>You can download, rate, and comment on <a href="http://www.ludumdare.com/compo/ludum-dare-27/?action=preview&amp;uid=25390">Wappansai!</a> over at the <a href="http://www.ludumdare.com/compo/ludum-dare-27/?action=preview&amp;uid=25390">Ludum Dare page</a> for it. Thanks for reading!</p>
-</div>
-
-	    	<a class="disqus_link" href="./posts/2013-08-27-ludum-dare.html#disqus_thread"></a>
     	</li>
     
 </ul>
