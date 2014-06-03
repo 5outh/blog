@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>What the Haskell?</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <style type="text/css">
+      @import url(http://fonts.googleapis.com/css?family=Yanone+Kaffeesatz);
+      @import url(http://fonts.googleapis.com/css?family=Droid+Serif:400,700,400italic);
+      @import url(http://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
+
+      body { font-family: 'Droid Serif'; color: #000000;}
+      h1, h2, h3 {
+        font-family: 'Yanone Kaffeesatz';
+        font-weight: normal;
+        color: #111;
+      }
+      .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; font-size: 20px; }
+      .big-text{ font-size: 24px; }
+      .bg { background-image: url(images/45degreee_fabric.png); background-repeat: repeat; }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle, bg
+
+# .center[What the Haskell? A Brief Introduction to Functional Programming]
+![](images/logo.png)
+---
+class: big-text, bg
+# .center[What is Haskell?]
+- Strongly typed
+  - All expressions have explicit types
+- Purely functional
+  - No implicit side-effects
+- Lazily evaluated
+  - Don't do anything until it's necessary
+- Built around ideas from Category Theory 
+  - But you don't need to know it! 
+---
+class: big-text bg
+
+# .center[So, what's the talk about?]
+
+### Two major differences between traditional imperative programming languages and Haskell:
+
+1. Control constructs: Loops and line-by-line execution versus folds, maps, filters, etc.
+2. Structural abstractions: No objects, so most OOP concepts go out the window.
+
+We're going to talk about (2), but I strongly encourage you to check out (1) as well!
+<br><br><br><br><br><br>
+.bottom[\* *Shoutout to [adit](http://adit.io/) for the pictures!*]
+---
+class: bg
+# .center[We'll start with two data types:]
+
+### A simple container...
+```haskell
+data Identity a = Identity a
+```
+
+### ... and a similar one that allows null values
+```haskell
+data Maybe a = Just a | Nothing
+```
+
+---
+class: bg, middle, center
+# .center[Question: How do we leverage simple data types to encapsulate complex behavior?]
+</br></br>
+#.center[Answer: We use abstract mathematical constructs (but don't be afraid!)]
+---
+class: bg
+# .center[Getting our feet wet: Functors]
+
+### Idea: Transform the "inner parts" of a structure
+
+```haskell
+class Functor f where
+  fmap :: (a -> b) -> f a -> f b
+```
+![](images/fmap_def.png)
+---
+class: bg
+# .center[Identity and Maybe are Functors]
+
+### The Identity Functor directly transforms its inner type:
+```haskell
+instance Functor Identity where
+  fmap f (Identity a) = Identity (f a)
+```
+### The Maybe Functor allows safe application of potentially failing computations:
+```haskell
+instance Functor Maybe where
+  fmap f Nothing = Nothing
+  fmap f (Just a) = Just (f a)
+```
+---
+class: bg
+# .center[A slight extension: Applicative]
+### Idea: Box a function *as the inner type*
+
+```haskell
+class Applicative f where
+  pure :: a -> f a
+  (<*>) :: f (a -> b) -> f a -> f b -- infix operator, pronounced "apply"
+```
+![](images/applicative_just.png)
+---
+class: bg
+# .center[Identity and Maybe are Applicatives]
+
+### The Identity Applicative applies a wrapped function to a wrapped value:
+```haskell
+instance Applicative Identity where
+  pure a = Identity a
+  Identity f <*> Identity a = Identity (f a)
+```
+
+### The Maybe Applicative either applies nothing or a wrapped function to 'Maybe' a value.
+```haskell
+instance Applicative Maybe where
+  pure a = Just a
+  Nothing <*> _ = Nothing
+  _ <*> Nothing = Nothing
+  Just f <*> Just b = Just (f b)
+```
+---
+class: bg
+# .center[...And Monads]
+### Idea: Build complete structures out of inner types and graft them together. This allows us to "chain" computations.
+
+```haskell
+class Monad m where
+  return :: a -> m a -- same as `pure` from Applicative
+  (>>=) :: m a -> (a -> m b) -> m b -- pronounced "bind"
+```
+![](images/bind_def.png)
+---
+class: bg
+# .center[Identity and Maybe are Monads]
+
+### The Identity Monad allows only basic function chaining.
+```haskell
+instance Monad Identity where
+  return a = Identity a
+  Identity a >>= f = f a
+```
+
+### The Maybe Monad allows safe chaining of computations that might fail.
+```haskell
+instance Monad Maybe where
+  return a = Just a
+  Nothing >>= f = Nothing
+  Just a >>= f = f a
+```
+---
+class: bg, big-text
+# .center[Why should I care?]
+
+1. The process of instantiating Functors, Applicatives and Monads (and other types, there are several!) is a highly general process. Many simple types generate incredibly powerful Functors, Applicatives, and Monads.
+2. Haskell's 'do' notation provides an alternate syntax for the chaining of monadic functions, giving you a lot of power at your fingertips while maintaining clean, clear code.
+
+```haskell
+do x <- funcA            funcA >>= \x -> 
+   funcB          ===      funcB >>= \_ ->
+   return x                  return x
+```
+---
+class: bg, middle, center
+
+# Let's look at a few more data types that admit Monad instances.
+
+.center[![](images/blackboard.jpg)]
+---
+class: bg
+# .center[Error handling!]
+```
+data Either a b = Left a | Right b
+
+httpStatus :: Int -> Either String Int
+httpStatus 200 = Right 200
+httpStatus 404 = Left "Not Found!"
+```
+---
+class: bg
+# .center[Non-determinism!]
+```haskell
+data [a] = a:[a] | []
+
+withSquares :: [Int]
+withSquares xs = do
+  x <- xs
+  return (x, x^2)
+```
+---
+class: bg
+# .center[Polymorphic logging!]
+```haskell
+newtype Writer w a = Writer (a, w)
+
+addTen :: Int -> Writer String Int
+addTen n = Writer (n + 10, "Added 10! ");
+
+addTenTwice :: Int -> Writer String Int
+addTenTwice n = do 
+  x <- addTen n
+  addTen x
+```
+---
+class: bg
+# .center[Stateful computations!]
+```haskell
+newtype State s a = State (a -> (s, a))
+
+isOddStep :: State Int Bool
+isOddStep = do
+  n <- get
+  put (n + 1)
+  return (n `mod` 2 == 1)
+```
+---
+class: bg
+# .center[Probability distributions (Weighted randomess)!]
+```haskell
+newtype Probability a = Probability [(a,Rational)]
+
+headsOrTails :: Probability Bool
+headsOrTails = Probability [('H', 1/2), ('T', 1/2)]
+```
+---
+class: bg
+# .center[Recursive-descent parsers!]
+```haskell
+newtype Parser a = Parser (String -> [(a, String)])
+
+inParens :: Parser String 
+inParens = do
+  char '('
+  str <- string
+  char ')'
+  return str
+``` 
+---
+class: bg
+# .center[Continuations!]
+
+```haskell
+newtype Cont r a = Cont ((a -> r) -> r)
+
+processLine :: Cont (IO ()) String
+processLine = Cont $ \f -> do
+  x <- getLine
+  f x
+```
+---
+class: bg, middle, center
+
+# And many, many more!
+---
+class: bg, big-text
+# Further Reading
+
+- Learn You a Haskell For Great Good! - http://learnyouahaskell.com/
+- Real World Haskell - http://book.realworldhaskell.org/
+- Shameless Plug (My Blog) - http://5outh.github.io/
+
+---
+class: bg, middle, center
+# Thank You!
+
+![](images/cake.jpeg)
+
+    </textarea>
+    <script src="http://gnab.github.io/remark/downloads/remark-latest.min.js" type="text/javascript">
+    </script>
+    <script type="text/javascript">
+      var slideshow = remark.create({
+        highlightStyle: 'zenburn',
+        highlightLanguage : 'haskell'
+      });
+    </script>
+  </body>
+</html>

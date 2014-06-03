@@ -57,7 +57,7 @@ main = hakyll $ do
             >>= loadAndApplyTemplate "templates/default.html" defaultContext
             >>= relativizeUrls
 
-    match (fromList ["4Space.html", "What-the-Haskell.pdf"]) $ do
+    match (fromList ["4Space.html", "What-the-Haskell.pdf", "wth.html"]) $ do
       route idRoute
       compile copyFileCompiler
 
