@@ -11,8 +11,8 @@ p{
 }
 
 div.post_body{
-    font-size:16px;
-    line-height: 2.5em;
+    font-size:15px;
+    line-height: 2em;
 }
 
 #about{
@@ -191,8 +191,8 @@ h4>a{
 }
 
 code{
-    font-family:"Lucida Console", Monaco, monospace;
-    font-size:13px;
+    font-family:'Cousine';
+    font-size:15px;
     background-color:#F1F1F1;
 }
 
@@ -215,8 +215,10 @@ pre.haskell{
 pre code{
     display:block;
     padding:8px;
-    border: 1px solid #AAA;
+    border: 2px solid #AAA;
+    border-radius: 10px;
     line-height:20px;
+    background-color: rgba(10,200,200,0.05);
 }
 
 div.info {
