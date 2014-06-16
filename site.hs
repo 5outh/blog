@@ -95,7 +95,7 @@ main = hakyll $ do
         posts <- recentFirst =<< loadAllSnapshots "posts/*" "content"
         let blogCtx =
               listField  "posts"   postCtx' (return (take 4 posts) ) <>
-              constField "title"   "Abstract Nonsense"               <>
+              constField "title"   "Ramblings"                       <>
               defaultContext
         makeItem ""
             >>= loadAndApplyTemplate "templates/post_snip.html" blogCtx

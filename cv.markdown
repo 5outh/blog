@@ -1,5 +1,5 @@
 ---
-title: Curriculum Vitae
+title: Resumé
 ---
 
 <ul style="list-style:none; padding-left:0">
@@ -28,10 +28,17 @@ title: Curriculum Vitae
 
 ### Related Experience
 
+**Seller Labs**  
+Athens, GA  
+Backend Engineer Intern
+April 2014 - Present
+
+- Wrote Node-MWS, a node.js based, highly scalable interface to Amazon MWS.
+
 **UGA College of Agricultural and Environmental Sciences**  
 Athens, GA  
 Web Developer  
-April 2012 - Present
+April 2012 - April 2014 (2 years)
 
 - Managed and maintained a website with 100+ sub-pages.  
 - Wrote and implemented 10+ web scripts to improve user experience within the CAES website.  
@@ -42,7 +49,7 @@ April 2012 - Present
 **Online Banking Solutions**  
 Atlanta, GA  
 Software Developer Intern  
-June 2011 - January 2012  
+June 2011 - January 2012 (6 months)
 
 - Co-wrote a robust analytics engine designed to track suspicious banking activity, including abnormal login times, locations, and frequency.
 - Implemented a telephony system that dynamically generates telephone calls to deliver important information to users.
@@ -53,20 +60,24 @@ June 2011 - January 2012
 **Personal Projects**  
 [https://github.com/5outh](https://github.com/5outh)  
 
-- Designed interpreters for two "turing-tarpit" programming languages.  
-- Created "Wappansai," a PC dungeon crawling game, from the ground up.  
-- Constructed clones for the classic games "Snake" and "Sokoban."
+- Designed and implemented Bang, an EDSL for composing drum compositions in Haskell.
+- Constructed interpreters for two simple programming languages.  
+- Created "Wappansai," a PC dungeon crawling game, from the ground up.
 
 ### Extra-curriculars
 
 - UGA Association for Computing Machinery, Student Chapter 
-- UGA Game Development Group
 - UGA Math Club
 
 ### Relevant Skills
-- Object-Oriented Programming
 - Functional Programming
-- Linear Algebra
+- Object-Oriented Programming
+- Backend Web Programming
 - Haskell 
-- C++
+- Javascript
 - Java
+- C++
+
+### Awards
+- Deans List, UGA (5 Semesters)
+- 2014 John G. Hollingsworth Award

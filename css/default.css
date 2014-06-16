@@ -1,17 +1,18 @@
 html{
-    font-family:sans-serif;
+    font-family: 'Open Sans', sans-serif;
     font-size: 16px;
-    background-image: url('../images/cubes.png');
+    background:url('../images/grey_wash_wall.png');
+    /*background-color: rgba(0,0,0,0.8);*/
 }
 
 p{
-    font-family: sans-serif;
+    font-family: 'Open Sans', sans-serif;
     color: #122;
 }
 
 div.post_body{
-    font-size:15px;
-    line-height: 30px;
+    font-size:16px;
+    line-height: 2.5em;
 }
 
 #about{
@@ -31,37 +32,48 @@ body {
     margin: 0px auto 0px auto;
     padding:0;
     width: 1000px;
-    background-color:rgba(150,255,150,0.02);
-    border-left:5px solid rgba(150,255,150,0.1);
-    border-right:5px solid rgba(150,255,150,0.1);
-    border-bottom:5px solid rgba(150,255,150,0.1);
+    border-left:4px solid #333;
+    border-right:4px solid #333;
+    border-bottom:4px solid #333;
 }
 
 a.post_title{
-    font-size:22px;
+    font-size:26px;
     text-align:center;
     text-transform:capitalize;
     text-decoration:none;
     color: #000;
-    /*border-left: 50px solid transparent;
+    border-left: 60px solid transparent;
     border-right: 10px solid transparent;
     border-bottom: 2px solid transparent;
-    border-top: 2px solid transparent;*/
-    margin-left: -8px;
-    /*background: #F5C090;*/
-    font-family: 'Montaga', serif;
-    font-weight: normal;
+    border-top: 2px solid transparent;
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+    margin-left: -60px;
+    background: #333;
+    color: #EEF;
+    font-family: 'Roboto', sans-serif;
+    font-weight: 100;
 }
 
 div#content{
-    padding: 0px 10px 0px 10px;
+    /*padding: 0px 10px 0px 10px;*/
+    padding: 20px;
+    background-image: url('../images/cubes.png');
 }
 
 div#header {
-    margin-bottom: 30px;
-    padding: 12px 10px 12px 10px;
-    height:40px;
+    /*margin-bottom: 30px;*/
+    /*padding: 12px 10px 12px 10px;*/
+    /*height:40px;*/
     /*background-color: #F9F9F9;*/
+    padding-bottom: 20px;
+    background-image: url('../images/cubes.png');
+}
+
+#logo {
+    padding-top: 20px;
+    padding-left:20px;
 }
 
 div#logo a {
@@ -82,6 +94,7 @@ div#logo p{
 div#header #navigation {
     margin-top: -40px;
     text-align: right;
+    padding-right: 20px;
 }
 
 div#header #navigation a {
