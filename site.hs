@@ -66,12 +66,13 @@ main = hakyll $ do
 
     {- Single Posts -}
     match "posts/*" $ do
+        let blogPostCtx = postCtx' <> (constField "post_full" "true")
         route $ setExtension "html"
         compile $ mathJaxPandocCompiler
             >>= saveSnapshot "content"
-            >>= loadAndApplyTemplate "templates/post_body.html"      postCtx'
-            >>= loadAndApplyTemplate "templates/disqus_partial.html" postCtx'
-            >>= loadAndApplyTemplate "templates/default.html"        postCtx'
+            >>= loadAndApplyTemplate "templates/post_body.html"      blogPostCtx
+            >>= loadAndApplyTemplate "templates/disqus_partial.html" blogPostCtx
+            >>= loadAndApplyTemplate "templates/default.html"        blogPostCtx
             >>= relativizeUrls
 
     {- List all post headers -}

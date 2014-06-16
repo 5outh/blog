@@ -36,7 +36,10 @@
             </div>
         </div>
         <div id="content">
-            <center><!-- <h1 class="title"><a href="#">$title$</a></h1> -->
+            <center>
+                $if(post_full)$
+                    <h1 class="title"><a href="#">$title$</a></h1>
+                $endif$
                 $if(author)$
                     <h3 class="subtitle">Published by $author$ on $date$</h3>
                 $endif$
