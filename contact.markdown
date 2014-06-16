@@ -20,6 +20,6 @@ GitHub    |[5outh](https://github.com/5outh)
 LinkedIn  |[Ben Kovach](http://www.linkedin.com/pub/benjamin-kovach/39/242/57b)
 
 ### Want to know more? 
-[Take a look at my CV]("cv.html").
+[Take a look at my CV](cv.html).
 
 </div>

@@ -51,11 +51,14 @@ main = hakyll $ do
         compile copyFileCompiler
    
    {- Static Pages -}
-    match (fromList [ "contact.markdown", "cv.markdown" ]) $ do
-      route $ setExtension "html"
-      compile $ pandocCompiler
-            >>= loadAndApplyTemplate "templates/default.html" defaultContext
-            >>= relativizeUrls
+    let static = do
+        route $ setExtension "html"
+        compile $ pandocCompiler
+              >>= loadAndApplyTemplate "templates/default.html" defaultContext
+              >>= relativizeUrls
+
+    match "contact.markdown" static
+    match "cv.markdown" static
 
     match (fromList ["4Space.html", "What-the-Haskell.pdf", "wth.html"]) $ do
       route idRoute
@@ -80,7 +83,6 @@ main = hakyll $ do
                   listField  "posts" postCtx' (return posts)  <>
                   constField "title" "All Posts"              <>
                   defaultContext
-
           makeItem ""
               >>= loadAndApplyTemplate "templates/archive.html" archiveCtx
               >>= loadAndApplyTemplate "templates/default.html" archiveCtx
@@ -92,13 +94,25 @@ main = hakyll $ do
       compile $ do
         posts <- recentFirst =<< loadAllSnapshots "posts/*" "content"
         let blogCtx =
-              listField  "posts"   postCtx' (return (take 4 posts) )  <>
-              constField "title"   "Abstract Nonsense"                     <>
+              listField  "posts"   postCtx' (return (take 4 posts) ) <>
+              constField "title"   "Abstract Nonsense"               <>
               defaultContext
         makeItem ""
-            >>= loadAndApplyTemplate "templates/post_snip.html"       blogCtx
-            >>= loadAndApplyTemplate "templates/default.html"         blogCtx
+            >>= loadAndApplyTemplate "templates/post_snip.html" blogCtx
+            >>= loadAndApplyTemplate "templates/default.html"   blogCtx
             >>= relativizeUrls
+
+    {- Make Atom/RSS Feeds -}
+    let mkFeed render = do
+        route idRoute
+        compile $ do
+            let feedCtx = postCtx' <> bodyField "description"
+            posts <- fmap (take 10) . recentFirst =<<
+                loadAllSnapshots "posts/*" "content"
+            render feedConfig feedCtx posts
+
+    create ["rss.xml" ] (mkFeed renderRss ) -- Parse error atm :(
+    create ["atom.xml"] (mkFeed renderAtom)
 
     {- Load Templates -}
     match "templates/*" $ compile templateCompiler
@@ -127,3 +141,12 @@ mathJaxPandocCompiler = pandocCompilerWith
                           defaultHakyllReaderOptions
                           defaultHakyllWriterOptions
                           { writerHTMLMathMethod = MathJax "" }
+
+feedConfig :: FeedConfiguration
+feedConfig = FeedConfiguration
+  { feedTitle       = "Abstract Nonsense"
+  , feedDescription = "Ramblings on Programming"
+  , feedAuthorName  = "Benjamin Kovach"
+  , feedAuthorEmail = "bkovach5@uga.edu"
+  , feedRoot        = "http://5outh.github.io"
+  }

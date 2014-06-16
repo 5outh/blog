@@ -1,7 +1,7 @@
 html{
     font-family:sans-serif;
-    font-size: 14px;
-    background: #34343F;
+    font-size: 16px;
+    background-image: url('../images/cubes.png');
 }
 
 p{
@@ -10,8 +10,8 @@ p{
 }
 
 div.post_body{
-    font-size:14px;
-    line-height: 24px;
+    font-size:15px;
+    line-height: 30px;
 }
 
 #about{
@@ -30,11 +30,11 @@ body {
     color: black;
     margin: 0px auto 0px auto;
     padding:0;
-    width: 800px;
-    background-color:#F9F9F9;
-    border-left:5px solid #F5C090;
-    border-right:5px solid #F5C090;
-    border-bottom:5px solid #F5C090;
+    width: 1000px;
+    background-color:rgba(150,255,150,0.02);
+    border-left:5px solid rgba(150,255,150,0.1);
+    border-right:5px solid rgba(150,255,150,0.1);
+    border-bottom:5px solid rgba(150,255,150,0.1);
 }
 
 a.post_title{
@@ -43,12 +43,12 @@ a.post_title{
     text-transform:capitalize;
     text-decoration:none;
     color: #000;
-    border-left: 50px solid transparent;
+    /*border-left: 50px solid transparent;
     border-right: 10px solid transparent;
     border-bottom: 2px solid transparent;
-    border-top: 2px solid transparent;
-    margin-left: -50px;
-    background: #F5C090;
+    border-top: 2px solid transparent;*/
+    margin-left: -8px;
+    /*background: #F5C090;*/
     font-family: 'Montaga', serif;
     font-weight: normal;
 }
@@ -61,7 +61,7 @@ div#header {
     margin-bottom: 30px;
     padding: 12px 10px 12px 10px;
     height:40px;
-    background-color: #F9F9F9;
+    /*background-color: #F9F9F9;*/
 }
 
 div#logo a {
@@ -99,7 +99,7 @@ footer{
     text-align: right;
     height: 60px;
     line-height:4px;
-    background-color:#F9F9F9;
+    /*background-color:#F9F9F9;*/
     position:relative;
 }
 
