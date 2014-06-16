@@ -1,6 +1,6 @@
 *.hi
 *.o
 *.sh
-/_cache
-/_site
+_cache/
+_site/
 
