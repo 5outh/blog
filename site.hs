@@ -79,6 +79,9 @@ main = hakyll $ do
 
     match "posts/*"  postHandler
     match "drafts/*" postHandler
+    match "projects/*" $ do
+      route $ setExtension "html"
+      compile (pandocCompiler >>= relativizeUrls)
 
     {- List all post headers -}
     create [ "archive.html" ] $ do
@@ -92,6 +95,19 @@ main = hakyll $ do
           makeItem ""
               >>= loadAndApplyTemplate "templates/archive.html" archiveCtx
               >>= loadAndApplyTemplate "templates/default.html" archiveCtx
+              >>= relativizeUrls
+
+    create [ "projects.html" ] $ do
+      route idRoute
+      compile $ do
+          posts <- recentFirst =<< loadAll "projects/*"
+          let projectCtx =
+                  listField  "projects" defaultContext (return posts)  <>
+                  constField "title" "Projects"                        <>
+                  defaultContext
+          makeItem ""
+              >>= loadAndApplyTemplate "templates/projects.html" projectCtx
+              >>= loadAndApplyTemplate "templates/default.html" projectCtx
               >>= relativizeUrls
 
     {- List most recent posts w/ body included-}
