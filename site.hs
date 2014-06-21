@@ -59,13 +59,15 @@ main = hakyll $ do
 
     match "contact.markdown" static
     match "cv.markdown" static
+    match "bang.md" static
 
     match (fromList ["4Space.html", "What-the-Haskell.pdf", "wth.html"]) $ do
       route idRoute
       compile copyFileCompiler
 
     {- Single Posts -}
-    match "posts/*" $ do
+
+    let postHandler = do
         let blogPostCtx = postCtx' <> (constField "post_full" "true")
         route $ setExtension "html"
         compile $ mathJaxPandocCompiler
@@ -74,6 +76,9 @@ main = hakyll $ do
             >>= loadAndApplyTemplate "templates/disqus_partial.html" blogPostCtx
             >>= loadAndApplyTemplate "templates/default.html"        blogPostCtx
             >>= relativizeUrls
+
+    match "posts/*"  postHandler
+    match "drafts/*" postHandler
 
     {- List all post headers -}
     create [ "archive.html" ] $ do
