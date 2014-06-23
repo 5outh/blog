@@ -1,9 +1,11 @@
 <ul class="project_list">
     $for(projects)$
-        <li class="project">            
-          <a href="$githublink$">$title$</a> 
-          $if(docslink)$ (<a href="$docslink$" class="docslink">docs</a>) $endif$
-          <p class="project_description">$description$</p>
+      <div class="project">   
+        <li>
+            $if(githublink)$ <a href="$githublink$"> $endif$ $title$ $if(githublink)$ </a> $endif$
+            $if(docslink)$ (<a href="$docslink$" class="docslink">docs</a>) $endif$
+            <p class="project_description">$description$</p>
         </li>
+      </div>
     $endfor$
 </ul>

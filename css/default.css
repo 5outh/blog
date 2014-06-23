@@ -262,7 +262,7 @@ div.info {
     list-style-type: none;
 }
 
-.project_list>li{
+.project_list li{
     margin-bottom:10px;
     padding: 10px;
     padding-bottom:0px;
@@ -276,11 +276,12 @@ div.info {
     font-size:20px;
     font-family: 'Roboto', sans-serif;
 }
-.project>a{
+.project>li>a{
     color: #933;
     text-transform: uppercase;
 }
-.project>a:hover{
+
+.project>li>a:hover{
     color: cornflowerblue;
 }
 
