@@ -81,3 +81,10 @@ June 2011 - January 2012 (6 months)
 ### Awards
 - Deans List, UGA (5 Semesters)
 - 2014 John G. Hollingsworth Award
+
+### Talks
+
+- What the Haskell? ([slides](What-the-Haskell.pdf)) - Spring 2014 
+    - Presented for the UGA ACM
+- What the Heck is a Monad? ([slides](wth.html)) - Summer 2014 
+    - Presented for the developer's meetup group of Athens
