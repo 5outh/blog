@@ -68,7 +68,7 @@ main = hakyll $ do
     {- Single Posts -}
 
     let postHandler = do
-        let blogPostCtx = postCtx' <> (constField "post_full" "true")
+        let blogPostCtx = postCtx' <> constField "post_full" "true"
         route $ setExtension "html"
         compile $ mathJaxPandocCompiler
             >>= saveSnapshot "content"
@@ -152,7 +152,7 @@ postCtxNoTags = dateField "date" "%B %e, %Y" <> defaultContext
 tagsField' :: String -> Tags -> Context a
 tagsField' = tagsFieldWith getTags renderTag mconcat
   where -- (modified from Hakyll.Web.Tags source)
-        renderTag :: String -> (Maybe FilePath) -> Maybe H.Html
+        renderTag :: String -> Maybe FilePath -> Maybe H.Html
         renderTag _   Nothing         = Nothing
         renderTag tag (Just filePath) =
           Just $ H.li ! A.class_ "tag" 

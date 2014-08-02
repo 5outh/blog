@@ -1,53 +1,52 @@
-<?xml version="1.0" encoding="UTF-8" ?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" style="position:relative;">
-    <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-        <title>Abstract Nonsense - Comonadic Trees</title>
-        <link rel="stylesheet" type="text/css" href="../css/default.css" />
-        <link rel="stylesheet" type="text/css" href="../css/syntax.css" />
-        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.4.3/jquery.min.js"></script>
-        <script src="../js/Utils.js"></script>
-        <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
-        </script>
-        <link href="http://fonts.googleapis.com/css?family=Alegreya+Sans+SC|Della+Respira|Montaga" rel="stylesheet" type="text/css">
-        <link href="http://fonts.googleapis.com/css?family=Open+Sans:400italic,400,700" rel="stylesheet" type="text/css">
-        <link href="http://fonts.googleapis.com/css?family=Roboto:400,100" rel="stylesheet" type="text/css">
-        <link href="http://fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
-        <script type="text/javascript">
-
-        </script>
-    </head>
-    <body id="main">
-      <div class="wrapper">
-        <div id="header">
-            <div id="logo">
-                <a href="../" id="main_title">Abstract Nonsense</a>
-                <p id="main_subtitle"><br /><a href="../">By Benjamin Kovach</a></p>
-            </div>
-            <div id="navigation">
-                <a href="../">Home</a>
-                <a href="../projects.html">Projects</a>
-                <a href="../contact.html">About</a>
-                <a href="../cv.html">CV</a>
-                <a href="../archive.html">Archive</a>
-                <a href="../atom.xml">Atom</a>
-            </div>
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Abstract Nonsense</title>
+    
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/pygment_trac.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!-- <link rel="stylesheet" type="text/css" href="/css/default.css" /> -->
+    <link rel="stylesheet" type="text/css" href="../css/syntax.css" />
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.4.3/jquery.min.js"></script>
+    <script src="../js/Utils.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+    </script>
+    <link href="http://fonts.googleapis.com/css?family=Alegreya+Sans+SC|Della+Respira|Montaga|Open+Sans:400italic,400,700|Roboto:400,100|Source+Code+Pro" rel="stylesheet" type="text/css">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1 id="blog_title"><a href="../">Abstract Nonsense</a></h1>
+        <p id="blog_subtitle">Ramblings by Benjamin Kovach</p>
+        <ul>
+            <li><a href="../">Home</a></li>
+            <li><a href="../projects.html">Projects</a></li>
+            <li><a href="../contact.html">About</a></li>
+            <li><a href="../cv.html">CV</a></li>
+            <li><a href="../archive.html">Archive</a></li>
+            <li><a href="../atom.xml">Atom</a></li>
+        </ul>
+         <p style="line-height:10px;"><small>Theme adapted from minimal by <a href="https://github.com/orderedlist">orderedlist</a>.</small></p>
+      </header>
+      <section>
+        <div style="text-align:right">
+            
+                <h1 class="title"><a href="#">Comonadic Trees</a></h1>
+            
+            
+                <h4 class="subtitle">Published by Ben Kovach on January 16, 2013</h4>
+            
+            
+                <h4 class="subtitle">Tags: </h4>
+            
         </div>
-        <div id="content">
-            <center>
-                
-                    <h1 class="title"><a href="#">Comonadic Trees</a></h1>
-                
-                
-                    <h3 class="subtitle">Published by Ben Kovach on January 16, 2013</h3>
-                
-                
-                    <h3 class="subtitle">Tags: </h3>
-                
-                    </center>
-            <div id="main_body">
-                <div class="post_body">
+        <p><div class="post_body">
 	<p>We’ve seen in the previous post what monads are and how they work. We saw a few monad instances of some common Haskell structures and toyed around with them a little bit. Towards the end of the post, I asked about making a Monad instance for a generalized tree data type. My guess is that it was relatively difficult. But why? Well, one thing that I didn’t touch on in my last post was that the monadic <code>&gt;&gt;=</code> operation can also be represented as <code>(join . fmap f)</code>, that is, <code>a &gt;&gt;= f = join $ fmap f a</code>, as long as <code>a</code> has a <code>Functor</code> instance. <code>join</code> is a generalized function of the following type:</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">join ::</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span> m (m a) <span class="ot">-&gt;</span> m a</code></pre>
 <p>Basically, this function takes a nested monad and “joins” it with the top level in order to get a regular <code>m a</code> out of it. Since you bind to functions that take as and produce <code>m a</code>s, <code>fmap f</code> actually makes <code>m (m a)</code>s and <code>join</code> is just the tool to fix up the <code>&gt;&gt;=</code> function to produce what we want. Keep in mind that <code>join</code> is not a part of the <code>Monad</code> typeclass, and therefore the above definition for <code>&gt;&gt;=</code> will not work. However, if we are able to make a specific <code>join</code> function (named something else, since <code>join</code> is taken!) for whatever type we are making a <code>Monad</code> instance for, we can certainly use the above definition. I don’t want to spend too much time on this, but I would like to direct the reader to the <code>Monad</code> instance for <code>[]</code> that I mentioned in the last post – can you see any similarities between this and the way I structured <code>&gt;&gt;=</code> above? Now back to the <code>Tree</code> type. Can you devise some way to join <code>Tree</code>s? That is, can you think of a way to flatten a <code>Tree</code> of <code>Tree a</code>s into a <code>Tree a</code>? This actually turns out to be quite difficult, and up to interpretation as to how you want to do it. It’s not as straightforward as moving <code>Maybe (Maybe a)</code>s into <code>Maybe a</code>s or <code>[[a]]</code>s into <code>[a]</code>s. Maybe if we put a <code>Monoid</code> restriction on our <code>a</code> type, as such…</p>
@@ -142,28 +141,11 @@ shortest (<span class="dt">Node</span> x xs) <span class="fu">=</span> x <span c
     </script>
     <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
     <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
-</div>
-            </div>
-        </div>
-      </div>
-        <footer>
-            <p id="copyright">© Benjamin Kovach, 2013 <br />
-                              Follow me on <a href="http://github.com/5outh">GitHub</a> and <a href="http://twitter.com/bendotk">Twitter</a>!<br />
-                              Looking for an older post? <a href="archive.html">Check out the archive</a>.
-                </div>
-                </p>
-        </footer>
-        <script type="text/javascript">
-        var disqus_shortname = 'abstract-nonsense';
-
-        /* * * DON'T EDIT BELOW THIS LINE * * */
-        (function () {
-            var s = document.createElement('script'); s.async = true;
-            s.type = 'text/javascript';
-            s.src = '//' + disqus_shortname + '.disqus.com/count.js';
-            (document.getElementsByTagName('HEAD')[0] || document.getElementsByTagName('BODY')[0]).appendChild(s);
-        }());
-
-        </script>
-    </body>
+</div></p>
+      </section>
+      <footer>
+      </footer>
+    </div>
+    <script src="js/scale.fix.js"></script>
+  </body>
 </html>

@@ -1,6 +1,7 @@
 ---
 title: Hylomorphisms and treesort
 author: Ben Kovach
+tags: recursion-schemes, papers
 ---
 Consider the following data structure, representing a binary search tree:
 
