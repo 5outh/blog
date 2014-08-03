@@ -104,10 +104,6 @@ th {
   color:#444;
 }
 
-img {
-  max-width:100%;
-}
-
 header {
   width:270px;
   float:left;
@@ -334,6 +330,7 @@ code {
 /* CIRCLES */
 #ben {
   width: 200px;
+  height:auto;
   border-radius: 100px;
   -moz-border-radius:100px;
   -webkit-border-radius:100px;
