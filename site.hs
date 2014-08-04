@@ -10,6 +10,8 @@ import           Text.Blaze.Html5
 import qualified Text.Blaze.Html5            as H
 import           Text.Blaze.Html5.Attributes
 import qualified Text.Blaze.Html5.Attributes as A
+import           Control.Applicative
+import           Control.Monad
 --------------------------------------------------------------------------------
 
 main :: IO ()
@@ -124,6 +126,22 @@ main = hakyll $ do
             >>= loadAndApplyTemplate "templates/default.html"   blogCtx
             >>= relativizeUrls
 
+    {- Experimental -}
+    forM_ [0..10] $ \n -> do
+      let title = fromFilePath $ "posts-" <> show n <> ".html"
+      create [ title ] $ do
+        route idRoute
+        compile $ do
+          posts <- takeFrom (n * 5) 5 <$> (recentFirst =<< loadAllSnapshots "posts/*" "content")
+          let blogCtx =
+                listField  "posts"   postCtx' (return posts) <>
+                constField "title"   ("page " ++ show n)     <>
+                defaultContext
+          makeItem ""
+              >>= loadAndApplyTemplate "templates/post_snip.html" blogCtx
+              >>= loadAndApplyTemplate "templates/default.html"   blogCtx
+              >>= relativizeUrls
+
     {- Make Atom/RSS Feeds -}
     let mkFeed render = do
         route idRoute
@@ -172,3 +190,8 @@ feedConfig = FeedConfiguration
   , feedAuthorEmail = "bkovach5@uga.edu"
   , feedRoot        = "http://5outh.github.io"
   }
+
+-- |
+-- Take @k@ members of a list starting from index @n@
+takeFrom :: Int -> Int -> [a] -> [a]
+takeFrom n k = take k . drop n
