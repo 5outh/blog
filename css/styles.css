@@ -54,7 +54,7 @@ a:hover small {
 }
 
 .wrapper {
-  width:860px;
+  width:960px;
   margin:0 auto;
 }
 
@@ -66,9 +66,8 @@ blockquote {
 }
 
 pre>code {
-  /*font-family:Monaco, Bitstream Vera Sans Mono, Lucida Console, Terminal, monospace;*/
   color:#333;
-  font-size:12px;
+  font-size:14px;
 }
 
 code {
@@ -197,7 +196,7 @@ header ul a strong {
 }
 
 section {
-  width:550px;
+  width:700px;
   float:right;
   padding-bottom:50px;
 }
@@ -306,12 +305,10 @@ footer {
   font-style: italic;
 }
 
-.haskell {
-  width: 600px;
-}
-
 .subtitle {
-  line-height: 4px;
+  line-height: 2px;
+  /*font-style: italic;*/
+  font-weight: normal;
 }
 
 code {
@@ -355,10 +352,23 @@ code {
   color: #000;
 }
 
-ul {
-  list-style: none;
-}
-
 .project_list { 
   line-height: 18px;
+}
+
+.social_links {
+  list-style-type: none;
+  margin: 0;
+  padding:0;
+  position:fixed;
+  right:20px;
+  top:20px;
+}
+
+.social_links>li {
+  display:inline;
+}
+
+.social_links>li>a>img {
+  width:30px;
 }

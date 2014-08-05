@@ -1,5 +1,10 @@
 <!doctype html>
 <html>
+  <ul class="social_links">
+    <li><a href="http://www.github.com/5outh"><img src="/images/github.png" class="githublink"></a></li>
+    <li><a href="http://www.twitter.com/bendotk"><img src="/images/twitter.png" class="twitterlink"></a></li>
+    <li><a href="https://www.linkedin.com/pub/benjamin-kovach/39/242/57b"><img src="/images/linkedin.png" class="linkedinlink"></a></li>
+  </ul>
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="chrome=1">
@@ -36,7 +41,7 @@
          <p style="line-height:10px;"><small>Theme adapted from minimal by <a href="https://github.com/orderedlist">orderedlist</a>.</small></p>
       </header>
       <section>
-        <div style="text-align:right">
+        <center>
             $if(post_full)$
                 <h1 class="title"><a href="#">$title$</a></h1>
             $endif$
@@ -46,7 +51,7 @@
             $if(tags)$
                 <h4 class="subtitle">Tags: $tags$</h4>
             $endif$
-        </div>
+        </center>
         <p>$body$</p>
       </section>
       <footer>

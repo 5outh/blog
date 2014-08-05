@@ -62,15 +62,6 @@ div#content{
     background-image: url('../images/cubes.png');
 }
 
-div#header {
-    /*margin-bottom: 30px;*/
-    /*padding: 12px 10px 12px 10px;*/
-    /*height:40px;*/
-    /*background-color: #F9F9F9;*/
-    padding-bottom: 20px;
-    background-image: url('../images/cubes.png');
-}
-
 #logo {
     padding-top: 20px;
     padding-left:20px;

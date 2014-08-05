@@ -1,5 +1,10 @@
 <!doctype html>
 <html>
+  <ul class="social_links">
+    <li><a href="http://www.github.com/5outh"><img src="../images/github.png" class="githublink"></a></li>
+    <li><a href="http://www.twitter.com/bendotk"><img src="../images/twitter.png" class="twitterlink"></a></li>
+    <li><a href="https://www.linkedin.com/pub/benjamin-kovach/39/242/57b"><img src="../images/linkedin.png" class="linkedinlink"></a></li>
+  </ul>
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="chrome=1">
@@ -35,7 +40,7 @@
          <p style="line-height:10px;"><small>Theme adapted from minimal by <a href="https://github.com/orderedlist">orderedlist</a>.</small></p>
       </header>
       <section>
-        <div style="text-align:right">
+        <center>
             
                 <h1 class="title"><a href="#">99 Haskell Problems #13: Run-length Encoding</a></h1>
             
@@ -45,7 +50,7 @@
             
                 <h4 class="subtitle">Tags: <a href="../tags/haskell.html">haskell</a>, <a href="../tags/problems.html">problems</a></h4>
             
-        </div>
+        </center>
         <p><div class="post_body">
 	<p>I’ve been working on The Ninety-Nine Haskell Problems lately, and I’ve come across a particular one that seems to be practical, and was a lot of fun to implement!</p>
 <p>The 99 Problems start out with a lot of list-based exercises, and eventually you’re asked to build up to a point where you can implement a function that performs Run-length encoding on a String. Basically what this means is, if we have a string, say “aabbcccd”, we’d group together the adjacent, identical characters, count them, and then output the characters along with their counts in a new list.</p>

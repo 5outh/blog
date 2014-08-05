@@ -1,5 +1,10 @@
 <!doctype html>
 <html>
+  <ul class="social_links">
+    <li><a href="http://www.github.com/5outh"><img src="./images/github.png" class="githublink"></a></li>
+    <li><a href="http://www.twitter.com/bendotk"><img src="./images/twitter.png" class="twitterlink"></a></li>
+    <li><a href="https://www.linkedin.com/pub/benjamin-kovach/39/242/57b"><img src="./images/linkedin.png" class="linkedinlink"></a></li>
+  </ul>
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="chrome=1">
@@ -35,12 +40,171 @@
          <p style="line-height:10px;"><small>Theme adapted from minimal by <a href="https://github.com/orderedlist">orderedlist</a>.</small></p>
       </header>
       <section>
-        <div style="text-align:right">
+        <center>
             
             
             
-        </div>
+        </center>
         <p><ul class="blog_list">
+    
+    	<li>
+	    	<div class="post_header">
+	<a class="post_title" href="./posts/2014-08-04-markov-chains.html">Modeling and Simulating Markov Chain Evolution</a>
+	<p class="published">Published by Ben Kovach on August  4, 2014</p>
+</div>
+<div class="post_body">
+	<p>In this post, I will describe and implement a small interface for modeling Markov chains and simulating their evolution in Haskell.</p>
+<h3 id="what-is-a-markov-chain">What is a Markov Chain?</h3>
+<p>
+<p><small width="200px" style="float:right; text-align:center"><a href="http://commons.wikimedia.org/wiki/File:Markovkate_01.svg#mediaviewer/File:Markovkate_01.svg"><img width="260px" src="http://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Markovkate_01.svg/1200px-Markovkate_01.svg.png" alt="Markovkate 01.svg"></a><br>A simple two-state Markov chain.<br>image by <a href="//commons.wikimedia.org/wiki/User:Joxemai4" title="User:Joxemai4">Joxemai4</a>.</small></p>
+A <a href="http://en.wikipedia.org/wiki/Markov_chain">discrete-time Markov chain (DTMC)</a> is a mathematical system that probabalistically transitions between states using only its current state. A Markov chain can be thought of as a directed graph with probabilities for edges and states for vertices. The Markov chain on the right has two states, <code>E</code> and <code>A</code>. The diagram states that a Markov chain in state <code>E</code> will transition back to state <code>E</code> with probability <code>0.3</code>, and to state <code>A</code> with probability <code>0.7</code>, and similarly for <code>A</code>’s transitions. They can be used for a wide variety of applications in statistical modeling.
+</p>
+
+<p>They can also be used to generate sentences similar to arbitrary blocks of text. We will explore this application towards the end of the post.</p>
+<h3 id="aside-weighted-random-generation">Aside: Weighted Random Generation</h3>
+<p>The first thing that comes to mind when I think of random generation is still <a href="http://learnyouahaskell.com/for-a-few-monads-more#making-monads">the <code>Prob</code> data type described in LYAH</a>. <a href="https://hackage.haskell.org/package/MonadRandom-0.1.13/docs/Control-Monad-Random.html">The <code>MonadRandom</code> library</a> defines a data type <a href="https://hackage.haskell.org/package/MonadRandom-0.1.13/docs/Control-Monad-Random.html#t:Rand"><code>Rand</code></a> which works, in many ways, in the same way as the <code>Prob</code> data type does (with a bit of extension to produce a transormer, etc.). I won’t go into the full details of how this works, but the basic ideas is that, given a list of outcomes with weights, e.g.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">[(<span class="st">&quot;Heads&quot;</span>, <span class="dv">1</span>), (<span class="st">&quot;Tails&quot;</span>, <span class="dv">1</span>)]</code></pre>
+<p>we can – by wrapping it in <code>Rand</code> and giving it a random generator – produce a weighted random outcome, “Heads” or “Tails” with the desired weighting. For a concrete example, here’s a functional program written using the <code>MonadRandom</code> library.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import </span><span class="dt">Control.Monad.Random</span>
+
+<span class="ot">main ::</span> <span class="dt">IO</span> ()
+main <span class="fu">=</span> newStdGen <span class="fu">&gt;&gt;=</span> print <span class="fu">.</span> evalRand coinFlip
+  <span class="kw">where</span> coinFlip <span class="fu">=</span> uniform [<span class="st">&quot;Heads&quot;</span>, <span class="st">&quot;Tails&quot;</span>]</code></pre>
+<p><code>uniform</code> constructs a <code>Rand</code> from a list with a uniform distribution, i.e. with each member having the same weight. <code>evalRand</code> takes a <code>Rand</code> and a random generator (we’re using <code>StdGen</code> here with <code>newStdGen</code>) and spits out a weighted random object. Running this will print “Heads” about 50% of the time and “Tails” about 50% of the time.</p>
+<p>Also of note is the <code>fromList</code> combinator, which takes a list of objects and their weights and constructs a <code>Rand</code> object. For example, replacing <code>coinFlip</code> with <code>fromList [(&quot;Heads&quot;, 1), (&quot;Tails&quot;, 1)]</code> yields the same program as above.</p>
+<h3 id="markov-chains-an-intermediate-representation">Markov Chains: An Intermediate Representation</h3>
+<p>In order to model Markov chains, we essentially want to build a graph with weighted edges. We can model edge-weighted graphs using a <code>HashMap</code> from vertices to lists of edges, represented as <code>(vertex, weight)</code> pairs (the vertex the edge points to and its weight).</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import qualified</span> <span class="dt">Data.HashMap.Lazy</span> <span class="kw">as</span> <span class="dt">M</span>
+<span class="kw">import           </span><span class="dt">Data.Ratio</span>
+
+<span class="kw">type</span> <span class="dt">MarkovI</span> a <span class="fu">=</span> <span class="dt">M.HashMap</span> a (<span class="dt">Maybe</span> [(a, <span class="dt">Rational</span>)])</code></pre>
+<p>The <code>MarkovI</code> (<code>I</code> for “intermediate”) data type is a synonym for a lazy <code>HashMap</code> from <code>a</code> to a list of vertex-edge pairs. The only difference here is that we allow the list to be empty by using <code>Maybe</code>, which signifies an “end” state in the chain with no outgoing transitions. We could remove this wrapper and use an empty list to signify the same thing, but this representation works better with <code>MonadRandom</code>, since <code>Rand</code>s can’t be empty, making the translation straightforward.</p>
+<p>You might also be wondering why we need an intermediate representation for Markov chains in the first place. The reason for this is that we can’t arbitrarily insert extra objects/weights into <code>Rand</code>s, and we’ll want to build up the mappings piecemeal. We need some intermediate structure to handle this functionality.</p>
+<p>We can define functions to build up <code>MarkovI</code>s via insertion of objects:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">insertMkvI ::</span> (<span class="dt">Hashable</span> a, <span class="dt">Eq</span> a) <span class="ot">=&gt;</span> <span class="dt">Rational</span> <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">MarkovI</span> a <span class="ot">-&gt;</span> <span class="dt">MarkovI</span> a
+insertMkvI r k v mkv <span class="fu">=</span> M.insert k (<span class="dt">Just</span> <span class="fu">$</span> <span class="kw">case</span> M.lookup k mkv <span class="kw">of</span>
+  <span class="dt">Nothing</span> <span class="ot">-&gt;</span> [(v, r)]
+  <span class="dt">Just</span> xs <span class="ot">-&gt;</span> <span class="kw">case</span> xs <span class="kw">of</span>
+    <span class="dt">Nothing</span> <span class="ot">-&gt;</span> [(v, r)]
+    <span class="dt">Just</span> ys <span class="ot">-&gt;</span> (v, r)<span class="fu">:</span>ys) mkv
+
+<span class="ot">insertEnd ::</span> (<span class="dt">Hashable</span> a, <span class="dt">Eq</span> a) <span class="ot">=&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">MarkovI</span> a <span class="ot">-&gt;</span> <span class="dt">MarkovI</span> a
+insertEnd k <span class="fu">=</span> M.insert k <span class="dt">Nothing</span></code></pre>
+<p><code>insertMkvI</code> inserts an edge into a <code>MarkovI</code>. Its first argument is the weight for the edge being inserted. Its next two arguments are the state objects to add a transition from/to, respectively, and the fourth is the <code>MarkovI</code> to insert into. <code>insertEnd</code> inserts a state with no outbound transitions into a Markov chain.</p>
+<p>It is worth noting that the <code>Rand</code> object constructed from lists like this:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">[(<span class="dt">True</span>, <span class="dv">1</span>), (<span class="dt">True</span>, <span class="dv">1</span>), (<span class="dt">False</span>, <span class="dv">1</span>)]</code></pre>
+<p><em>do</em> weight <code>True</code> twice as heavily as <code>False</code>. This will become important later, when talking about a sentence generator.</p>
+<h3 id="markov-chains-final-representation">Markov Chains: Final Representation</h3>
+<p>The final representation of Markov chains simply turns those <code>[(a, Rational)]</code>s in <code>MarkovI</code> into true <code>Rand</code>s.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import qualified</span> <span class="dt">Control.Monad.Random</span> <span class="kw">as</span> <span class="dt">R</span>
+
+<span class="kw">newtype</span> <span class="dt">Markov</span> g a <span class="fu">=</span> <span class="dt">Markov</span>{<span class="ot"> getMarkov ::</span> <span class="dt">M.HashMap</span> a (<span class="dt">Maybe</span> (<span class="dt">R.Rand</span> g a)) }</code></pre>
+<p>We can define a simple conversion function to construct <code>Markov</code>s from the intermediate representation by converting their distribution lists to <code>Rand</code>s via <code>fromList</code>. This is straightforward because empty lists are represented as <code>Nothing</code>, so we don’t have to explicitly deal with that edge case when calling <code>R.fromList</code>, which would normally fail in such a case.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">fromMarkovI ::</span> <span class="dt">RandomGen</span> g <span class="ot">=&gt;</span> <span class="dt">MarkovI</span> a <span class="ot">-&gt;</span> <span class="dt">Markov</span> g a
+fromMarkovI <span class="fu">=</span> <span class="dt">Markov</span> <span class="fu">.</span> M.map (R.fromList <span class="fu">&lt;$&gt;</span>)</code></pre>
+<p>The first goal is to be able to – given a state and a random generator – transition to a new state probabalistically. The second goal is to be able to repeat this <code>n</code> times and track the states we pass through.</p>
+<p><code>runMarkov1</code> accomplishes the first goal:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">Err</span> <span class="fu">=</span> <span class="dt">String</span>
+<span class="kw">data</span> <span class="dt">Outcome</span> g a <span class="fu">=</span>
+    <span class="dt">Error</span> <span class="dt">Err</span>
+  <span class="fu">|</span> <span class="dt">Val</span> a g
+  <span class="fu">|</span> <span class="dt">End</span>
+    <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)
+
+<span class="ot">runMarkov1 ::</span> (<span class="dt">R.RandomGen</span> g, <span class="dt">Hashable</span> a, <span class="dt">Eq</span> a) <span class="ot">=&gt;</span> <span class="dt">Markov</span> g a <span class="ot">-&gt;</span> g <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">Outcome</span> g a
+runMarkov1 mkv gen x <span class="fu">=</span> <span class="kw">case</span> M.lookup x (getMarkov mkv) <span class="kw">of</span>
+  <span class="dt">Nothing</span> <span class="ot">-&gt;</span> <span class="dt">Error</span> <span class="st">&quot;Internal error; cannot find value&quot;</span>
+  <span class="dt">Just</span> rs <span class="ot">-&gt;</span> <span class="kw">case</span> flip R.runRand gen <span class="fu">&lt;$&gt;</span> rs <span class="kw">of</span>
+    <span class="dt">Nothing</span> <span class="ot">-&gt;</span> <span class="dt">End</span>
+    <span class="dt">Just</span> (a, g) <span class="ot">-&gt;</span> <span class="dt">Val</span> a g</code></pre>
+<p>First, if the state we’re looking for doesn’t exist, it is impossible to transition out of it, so the computation fails with an internal error. If not, we get a probablistic value out of the transition mappings from the state in question. If there aren’t any, we just <code>End</code> – we cannot transition, but don’t really want to throw an error. If there are values to choose from, we return one along with a new random generator, wrapped in <code>Val</code>.</p>
+<p>Extending this to run <code>n</code> times isn’t too tough. It mostly consists of finagling data types into the representation we want.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">runMarkov ::</span> (<span class="dt">R.RandomGen</span> g, <span class="dt">Hashable</span> a, <span class="dt">Eq</span> a) <span class="ot">=&gt;</span> <span class="dt">Integer</span> <span class="ot">-&gt;</span> <span class="dt">Markov</span> g a <span class="ot">-&gt;</span> g <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">Either</span> <span class="dt">Err</span> [a]
+runMarkov n mkv gen x <span class="fu">=</span> go n
+  <span class="kw">where</span>
+    go m <span class="fu">|</span> m <span class="fu">&lt;=</span> <span class="dv">0</span> <span class="fu">=</span> <span class="dt">Right</span> []
+         <span class="fu">|</span> otherwise <span class="fu">=</span> (x<span class="fu">:</span>) <span class="fu">&lt;$&gt;</span> <span class="kw">case</span> runMarkov1 mkv gen x <span class="kw">of</span>
+            <span class="dt">Val</span> a g <span class="ot">-&gt;</span> runMarkov (n<span class="fu">-</span><span class="dv">1</span>) mkv g a
+            <span class="dt">End</span> <span class="ot">-&gt;</span> <span class="dt">Right</span> []
+            <span class="dt">Error</span> err <span class="ot">-&gt;</span> <span class="dt">Left</span> err</code></pre>
+<p>If we hit an <code>End</code>, the simulation terminates because it can’t progress any further. If we get an error along the way, we wrap it in <code>Left</code> and return it. Otherwise, we run <code>runMarkov1</code> repeatedly <code>n</code> times, starting from the previously computed state each time, and collecting the results into a list. If no errors occur, the result will be a list of states passed through while the simulation runs.</p>
+<p>We can now define a <code>fromList</code> function, which builds up a Markov chain from mappings represented in list form.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">fromList ::</span> (<span class="dt">Hashable</span> a, <span class="dt">Eq</span> a, <span class="dt">R.RandomGen</span> g) <span class="ot">=&gt;</span> [(a, [(a, <span class="dt">Rational</span>)])] <span class="ot">-&gt;</span> <span class="dt">Markov</span> g a
+fromList <span class="fu">=</span> <span class="dt">Markov</span> <span class="fu">.</span> foldl' (flip <span class="fu">$</span> uncurry ins) M.empty
+  <span class="kw">where</span> ins a b m <span class="fu">=</span> <span class="kw">case</span> b <span class="kw">of</span>
+          [] <span class="ot">-&gt;</span> M.insert a <span class="dt">Nothing</span> m
+          _  <span class="ot">-&gt;</span> M.insert a (<span class="dt">Just</span> <span class="fu">$</span> R.fromList b) m</code></pre>
+<p>With this at our disposal, it’s easy to model and run the example Markov chain I mentioned earlier.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">example ::</span> <span class="dt">Markov</span> <span class="dt">PureMT</span> <span class="dt">String</span>
+example <span class="fu">=</span> fromList [(<span class="st">&quot;E&quot;</span>, [(<span class="st">&quot;E&quot;</span>, <span class="dv">3</span>), (<span class="st">&quot;A&quot;</span>, <span class="dv">7</span>)]), (<span class="st">&quot;A&quot;</span>, [(<span class="st">&quot;E&quot;</span>, <span class="dv">4</span>), (<span class="st">&quot;A&quot;</span>, <span class="dv">6</span>)])]</code></pre>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">λ<span class="fu">&gt;</span> <span class="fu">:</span>m <span class="fu">+</span> <span class="dt">System.Random.Mersenne.Pure64</span>
+λ<span class="fu">&gt;</span> gen <span class="ot">&lt;-</span> newPureMT
+λ<span class="fu">&gt;</span> runMarkov <span class="dv">15</span> example gen <span class="st">&quot;E&quot;</span>
+<span class="dt">Right</span> [<span class="st">&quot;E&quot;</span>,<span class="st">&quot;A&quot;</span>,<span class="st">&quot;A&quot;</span>,<span class="st">&quot;A&quot;</span>,<span class="st">&quot;E&quot;</span>,<span class="st">&quot;E&quot;</span>,<span class="st">&quot;A&quot;</span>,<span class="st">&quot;A&quot;</span>,<span class="st">&quot;A&quot;</span>,<span class="st">&quot;A&quot;</span>,<span class="st">&quot;A&quot;</span>,<span class="st">&quot;A&quot;</span>,<span class="st">&quot;E&quot;</span>,<span class="st">&quot;E&quot;</span>,<span class="st">&quot;A&quot;</span>]</code></pre>
+<p>The Markov chain passes through “A” a bit more often than “E”, which is to be expected from its definition.</p>
+<h3 id="towards-a-sentence-generator">Towards a Sentence Generator</h3>
+<p>The process of sentence generation using Markov chains is pretty simple: For each word in a “seed text,” find the probability of each other word proceeding it. Build a Markov chain out of these probabilities, using words as states, and run it a desired number of times. In order to do this, we’ll first need a utility function which takes pairs of elements (which will represent words along with the word following them in a “seed text”) and produces a Markov chain out of them.</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">insertMkvPairsInto ::</span> (<span class="dt">Hashable</span> a, <span class="dt">Eq</span> a) <span class="ot">=&gt;</span> <span class="dt">MarkovI</span> a <span class="ot">-&gt;</span> [(a, a)] <span class="ot">-&gt;</span> <span class="dt">MarkovI</span> a
+insertMkvPairsInto mkv [] <span class="fu">=</span> mkv
+insertMkvPairsInto mkv ps <span class="fu">=</span> insertEnd lst <span class="fu">$</span> foldl' (flip (uncurry (insertMkvI <span class="dv">1</span>))) mkv ps
+  <span class="kw">where</span> lst <span class="fu">=</span> snd <span class="fu">$</span> last ps</code></pre>
+<p>For each pair <code>(x, y)</code>, we insert a transition <code>x -&gt; y</code> with weight 1 into the Markov chain, and insert the final value in as an <code>End</code>. The reason this works is because of something I mentioned earlier: <code>Rand</code> handles distributions like <code>[(True, 1), (True, 1), (False, 1)]</code> properly. We build lists very similar to this one when processing a block of text for sentence generation, and when finally converting to <code>Markov</code>, all of that plumbing gets handled automatically. As a final note, we’ll use that <code>End</code> construct to mark the end of a sentence.</p>
+<p>The next thing is actually building a <code>MarkovI</code> from a sentence – this can be done by zipping the list of its words with the tail of it and using the aforementioned function, like so:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import qualified</span> <span class="dt">Data.Text</span> <span class="kw">as</span> <span class="dt">T</span>
+<span class="ot">wordPairs ::</span> <span class="dt">T.Text</span> <span class="ot">-&gt;</span> [(<span class="dt">T.Text</span>, <span class="dt">T.Text</span>)]
+wordPairs <span class="fu">=</span> (zip <span class="fu">&lt;*&gt;</span> tail) <span class="fu">.</span> T.words
+
+<span class="ot">insertSentence ::</span> <span class="dt">MarkovI</span> <span class="dt">T.Text</span> <span class="ot">-&gt;</span> <span class="dt">T.Text</span> <span class="ot">-&gt;</span> <span class="dt">MarkovI</span> <span class="dt">T.Text</span>
+insertSentence mkv <span class="fu">=</span> insertMkvPairsInto mkv <span class="fu">.</span> wordPairs</code></pre>
+<p><small>wordPairs could be written more simply in a pointful style, but I think the point{free, less} version is cool. :)</small></p>
+<p>Now, to build a Markov chain from a bunch of sentences (be it a paragraph, a book), we can just fold into an empty <code>MarkovI</code> and convert it from the intermediate representation:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">fromSentences ::</span> <span class="dt">R.RandomGen</span> g <span class="ot">=&gt;</span> [<span class="dt">T.Text</span>] <span class="ot">-&gt;</span> <span class="dt">Markov</span> g <span class="dt">T.Text</span>
+fromSentences <span class="fu">=</span> fromMarkovI <span class="fu">.</span> foldl' insertSentence M.empty</code></pre>
+<p>The rest is mostly plumbing:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">{-# LANGUAGE OverloadedStrings #-}</span>
+<span class="kw">import </span><span class="dt">System.Random.Mersenne.Pure64</span>
+
+<span class="ot">runFromSentences ::</span> <span class="dt">Int</span> <span class="ot">-&gt;</span> [<span class="dt">T.Text</span>] <span class="ot">-&gt;</span> <span class="dt">IO</span> (<span class="dt">Either</span> <span class="dt">Err</span> <span class="dt">T.Text</span>)
+runFromSentences n sentences <span class="fu">=</span> <span class="kw">do</span>
+  g <span class="ot">&lt;-</span> newPureMT
+  <span class="kw">let</span> hds <span class="fu">=</span> map (head <span class="fu">.</span> T.words) sentences
+  seed <span class="ot">&lt;-</span> R.uniform hds
+  return <span class="fu">$</span> T.unwords <span class="fu">&lt;$&gt;</span> runMarkov n (fromSentences sentences) g seed
+
+<span class="ot">test ::</span> [<span class="dt">T.Text</span>]
+test <span class="fu">=</span> [
+  <span class="st">&quot;I am a monster.&quot;</span>,
+  <span class="st">&quot;I am a rock star.&quot;</span>,
+  <span class="st">&quot;I want to go to Hawaii.&quot;</span>,
+  <span class="st">&quot;I want to eat a hamburger.&quot;</span>,
+  <span class="st">&quot;I have a really big headache.&quot;</span>,
+  <span class="st">&quot;Haskell is a fun language!&quot;</span>,
+  <span class="st">&quot;Go eat a big hamburger!&quot;</span>,
+  <span class="st">&quot;Markov chains are fun to use!&quot;</span>
+  ]</code></pre>
+<p>We get a new <a href="http://hackage.haskell.org/package/mersenne-random-pure64-0.2.0.2/docs/System-Random-Mersenne-Pure64.html"><code>PureMT</code></a> to use for a generator, and grab a random word (from the beginning of a sentence) to use as the starting state. We then run a markov simulation, collecting the words we pass through, and finally call <code>T.unwords</code> on the result to build a sentence from the words in sequence. Running this yields some interesting statements (and a lot of nonsensical ones), for example:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">λ<span class="fu">&gt;</span> runFromSentences <span class="dv">10</span> test
+<span class="dt">Right</span> <span class="st">&quot;Haskell is a hamburger.&quot;</span>
+<span class="dt">Right</span> <span class="st">&quot;Go eat a really big headache.&quot;</span>
+<span class="dt">Right</span> <span class="st">&quot;I am a fun to go to go to eat&quot;</span></code></pre>
+<h3 id="application-rap-candy">Application: Rap Candy</h3>
+<p>As you might imagine, this type of thing gets more interesting when you’re working with a larger set of sentences. For me, I thought it would be fun(ny) to take lines from Eminem’s music as “sentences,” make tweet-sized snippets from them, and automate a twitter bot to post one every day. Most of the tweets are pretty nonsensical (and very vulgar), here’s one:</p>
+<blockquote class="twitter-tweet" lang="en"><p>
+Now I'm on a magazine
+Take a catastrophe for me
+Cause of New sh*t, exclusive whoo kid
+I'm the first king of danger, intertwine it
+</p>
+— rapcandy (<span class="citation">@_rapcandy</span>) <a href="https://twitter.com/_rapcandy/statuses/495019304883331072">August 1, 2014</a>
+</blockquote>
+<script async src="//platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<p><a href="https://github.com/5outh/rapcandy">rapcandy is open source</a>. Its Markov chain mechanism differs slightly from what was presented here, but the ideas are the same. It also includes a simple example of how to connect to Twitter using Haskell (which I’ll be covering separately in a short blog post soon), as well as web-scraper written in node that I used to download Eminem’s lyrics programmatically. Feel free to browse the code and follow <a href="https://twitter.com/_rapcandy%20on%20Twitter">@_rapcandy</a>.</p>
+<p>I’ve also boxed up (most of) the code from this blog post into a small cabal package that you can use if you’d like to play around with your own Markov chain based applications. <a href="https://github.com/5outh/markov-sim">You can download markov-sim and browse its source here</a>.</p>
+</div>
+
+	    	<a class="disqus_link" href="./posts/2014-08-04-markov-chains.html#disqus_thread"></a>
+    	</li>
     
     	<li>
 	    	<div class="post_header">
@@ -268,221 +432,6 @@ what <span class="fu">=</span> fromList <span class="fu">.</span> toList</code><
 </div>
 
 	    	<a class="disqus_link" href="./posts/2014-04-19-What-the-Haskell-Code.html#disqus_thread"></a>
-    	</li>
-    
-    	<li>
-	    	<div class="post_header">
-	<a class="post_title" href="./posts/2013-12-19-bots4-clone.html">Making a Bots2 clone using Lenses and Pipes</a>
-	<p class="published">Published by Ben Kovach on December 19, 2013</p>
-</div>
-<div class="post_body">
-	<h4 id="about-bots2">About bots2</h4>
-<p>When I was in high school, I came across an internet game called bots2. Bots2 was a multiplayer game where people can log in, customize a robot, and autonomously fight against pre-built AI and other human players. The game would progress in rounds, wherein each robot would attempt to destroy its adversary. The game would continue until one robot dropped below 0 health, at which point the other robot would emerge victorious.</p>
-<p>Bots2 was purportedly <a href="http://bots4.net/documentation">attacked by hackers</a> and never brought back up. However, <a href="http://edmazur.com/">someone</a> has taken the liberty of creating a clone of the old game, named bots4. If you’re interested, <a href="http://bots4.net/">you can play bots4 here</a>. In fact, I might recommend playing around with it for a minute or two, because we’ll be building a (very) simple version of bots2 in this post!</p>
-<h4 id="preliminaries">Preliminaries</h4>
-<p>I only assume a basic familiarity with monad transformers in this post. If you need an introduction, <a href="http://blog.sigfpe.com">sigfpe</a> has a <a href="http://blog.sigfpe.com/2006/05/grok-haskell-monad-transformers.html">great introduction to them on his blog</a>. We’ll be using Russell O’Connor’s <a href="http://hackage.haskell.org/package/lens-family">Lens-Family</a> and Gabriel Gonzalez’ <a href="http://hackage.haskell.org/package/pipes">Pipes</a> libraries to make the implementation easy (and educational!).</p>
-<p>I also want to give a shout out to Gabriel, who was generous enough to personally review and edit my initial draft of the code in this post – it looks much better than it did before, thanks to him.</p>
-<p>Without further ado, let’s get started!</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import           </span><span class="dt">Pipes</span>
-<span class="kw">import qualified</span> <span class="dt">Pipes.Prelude</span> <span class="kw">as</span> <span class="dt">P</span>
-<span class="kw">import qualified</span> <span class="dt">System.Random</span> <span class="kw">as</span> <span class="dt">R</span>
-<span class="kw">import           </span><span class="dt">Lens.Family2</span>             
-<span class="kw">import           </span><span class="dt">Lens.Family2.Stock</span>       
-<span class="kw">import           </span><span class="dt">Lens.Family2.State.Lazy</span> 
-<span class="kw">import           </span><span class="dt">Control.Monad.Trans.State</span>
-<span class="kw">import           </span><span class="dt">Control.Monad</span>
-<span class="kw">import           </span><span class="dt">Control.Concurrent</span>(threadDelay)</code></pre>
-<h4 id="modeling-bots">Modeling Bots</h4>
-<p>The game we wish to build pits two bots against each other, who will fight to the death based on who has the better stats (and a bit of randomness). We’ll need to be able to model each bot as an entity along with its specific stats.</p>
-<p>During each round, each bot:</p>
-<ol style="list-style-type: decimal">
-<li>Deals damage to its opponent</li>
-<li>Has a chance to block (and take half damage)</li>
-<li>Has a chance to dodge (and take no damage)</li>
-</ol>
-<p>We’ll model a <code>Bot</code> like so:</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Bot</span> <span class="fu">=</span> <span class="dt">Bot</span>
-    { _<span class="ot">name ::</span> <span class="dt">String</span>
-    , _<span class="ot">str  ::</span> <span class="dt">Int</span>
-    , _<span class="ot">dex  ::</span> <span class="dt">Int</span>
-    , _<span class="ot">con  ::</span> <span class="dt">Int</span>
-    , _<span class="ot">hp   ::</span> <span class="dt">Int</span>
-    } <span class="kw">deriving</span> (<span class="dt">Show</span>, <span class="dt">Eq</span>)</code></pre>
-<p>We’ll use <code>str</code> to modify damage output, <code>dex</code> to modify dodge chance, <code>con</code> to modify block chance, and <code>hp</code> to denote the amount of health the bot has remaining. We’ll also tack on a <code>name</code> so we can print out more informative messages during the game. Note the prefix <code>_</code> on each field; these are here so we can give our <code>Lens</code>es nicer names.</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">name ::</span> <span class="dt">Lens'</span> <span class="dt">Bot</span> <span class="dt">String</span>
-str, dex, con,<span class="ot"> hp ::</span> <span class="dt">Lens'</span> <span class="dt">Bot</span> <span class="dt">Int</span>
-name k (<span class="dt">Bot</span> nm s d c h)  <span class="fu">=</span> fmap (\nm' <span class="ot">-&gt;</span> <span class="dt">Bot</span> nm' s d c h) (k nm)
-str  k (<span class="dt">Bot</span> nm s d c h)  <span class="fu">=</span> fmap (\s'  <span class="ot">-&gt;</span> <span class="dt">Bot</span> nm s' d c h) (k s )
-dex  k (<span class="dt">Bot</span> nm s d c h)  <span class="fu">=</span> fmap (\d'  <span class="ot">-&gt;</span> <span class="dt">Bot</span> nm s d' c h) (k d )
-con  k (<span class="dt">Bot</span> nm s d c h)  <span class="fu">=</span> fmap (\c'  <span class="ot">-&gt;</span> <span class="dt">Bot</span> nm s d c' h) (k c )
-hp   k (<span class="dt">Bot</span> nm s d c h)  <span class="fu">=</span> fmap (\h'  <span class="ot">-&gt;</span> <span class="dt">Bot</span> nm s d c h') (k h )</code></pre>
-<p>We can now define some <code>Lens</code>es for our <code>Bot</code> fields. We do this manually because it’s relatively simple and to avoid the <code>TemplateHaskell</code> requirement that comes along with Edward Kmett’s larger <a href="http://hackage.haskell.org/package/lens-3.10.0.1">Lens</a> library. Given a more complicated system, we might choose to use <a href="http://hackage.haskell.org/package/lens-3.10.0.1">Lens</a> to automatically generate these. However, this is a small program so the overhead isn’t necessary. Also, don’t worry too much about the declarations of the <code>Lens</code>es above: Just know that they allow us to do some cool stuff later on.</p>
-<p>With these <code>Lens</code>es defined and our <code>Bot</code> data type in place, we can move on to defining more of the game’s semantics.</p>
-<h4 id="more-types">More Types</h4>
-<p>We’ll need a data type to represent a bot’s actions during a single round, and a game state representing the global state of the game:</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">Event</span>    <span class="fu">=</span> (<span class="dt">Int</span>, <span class="dt">Bool</span>, <span class="dt">Bool</span>)
-<span class="kw">type</span> <span class="dt">BotState</span> <span class="fu">=</span> (<span class="dt">R.StdGen</span>, (<span class="dt">Bot</span>, <span class="dt">Bot</span>))</code></pre>
-<p>The <code>Event</code> type defines a round of a single Bot’s behavior in a 3-tuple – the first parameter corresponds to damage dealt, the second to whether or not the bot dodged, and the third to whether or not the bot blocked. We will process these events later.</p>
-<p>The <code>BotState</code> type boxes up a <code>StdGen</code> for us to use when generating random events, and a 2-tuple of <code>Bot</code>s – the player character’s bot and the enemy AI. This is all the global state we need in our game.</p>
-<p>We can make some new <code>Lens</code>es for these types, given that 2-tuples are easily indexed using <code>Lens</code>:</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">generator ::</span> <span class="dt">Lens'</span> <span class="dt">BotState</span> <span class="dt">R.StdGen</span>
-generator <span class="fu">=</span> _1
-
-<span class="ot">player ::</span> <span class="dt">Lens'</span> <span class="dt">BotState</span> <span class="dt">Bot</span>
-player <span class="fu">=</span> _2<span class="fu">.</span>_1
-
-<span class="ot">enemy ::</span> <span class="dt">Lens'</span> <span class="dt">BotState</span> <span class="dt">Bot</span>
-enemy <span class="fu">=</span> _2<span class="fu">.</span>_2</code></pre>
-<p>Here we create a <code>Lens</code> that references the <code>StdGen</code> of the <code>BotState</code>, using <code>_1</code>. We can also compose <code>Lens</code>es using <code>.</code> (from the <code>Prelude</code>!) and we use this functionality with the simple <code>Lens</code>es <code>_1</code> and <code>_2</code> to make <code>Lens</code>es referencing the player and enemy AI in a <code>BotState</code>.</p>
-<p>Well, that’s about all the type declaring we need to do. Now we can get on with piecing together the actual gameplay.</p>
-<h4 id="generating-events">Generating Events</h4>
-<p>Now comes the fun part: actually programming the game mechanics. Essentially what we’d like to do is the following:</p>
-<ol style="list-style-type: decimal">
-<li>Generate an event for the player and enemy at the same time.</li>
-<li>Process each event.</li>
-<li>If either bot is dead, end the game and print an ending message.</li>
-</ol>
-<p>Here we’ll focus on (1), generating events. Let’s take a look at some code:</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">genEvent ::</span> <span class="dt">Bot</span> <span class="ot">-&gt;</span> <span class="dt">StateT</span> <span class="dt">R.StdGen</span> <span class="dt">IO</span> <span class="dt">Event</span>
-genEvent bot <span class="fu">=</span> <span class="kw">do</span>
-    [n, m, r] <span class="ot">&lt;-</span> replicateM <span class="dv">3</span> <span class="fu">$</span> state (R.randomR (<span class="dv">0</span>, <span class="dv">100</span>))
-    <span class="kw">let</span> dodge <span class="fu">=</span> n <span class="fu">&lt;</span> <span class="dv">100</span> <span class="fu">*</span> bot<span class="fu">^.</span>dex <span class="ot">`div`</span> (bot<span class="fu">^.</span>dex <span class="fu">+</span> <span class="dv">50</span>)
-        block <span class="fu">=</span> m <span class="fu">&lt;</span> <span class="dv">100</span> <span class="fu">*</span> bot<span class="fu">^.</span>con <span class="ot">`div`</span> (bot<span class="fu">^.</span>con <span class="fu">+</span> <span class="dv">30</span>)
-        dmg   <span class="fu">=</span> bot<span class="fu">^.</span>str <span class="fu">+</span> (bot<span class="fu">^.</span>str <span class="fu">*</span> r) <span class="ot">`div`</span> <span class="dv">30</span>
-    return (dmg, dodge, block)</code></pre>
-<p>In order to generate an event for a bot, we grab three numbers between 0 and 100:</p>
-<ul>
-<li>n, which helps determine if the bot dodges,</li>
-<li>m, which helps determine if the bot blocks,</li>
-<li>and r, which helps determine how much damage the bot does.</li>
-</ul>
-<p>We can use the <code>state</code> combinator here to lift the computation <code>(R.randomR (0, 100))</code> to a computation in the <code>StateT</code> monad. We then perform some arithmetic using the random numbers we grabbed along with the <code>dex</code>, <code>con</code>, and <code>str</code> stats from our <code>Bot</code>. We access these using the <code>^.</code> combinator from the <code>lens-family</code>, using the <code>Lens</code>es we defined above.</p>
-<p>Important note: We are producing the amount of damage a bot <em>deals</em> here. We will want to process events according to how much damage each bot <em>receives</em>, which we’ll handle in a minute.</p>
-<p>Now that we can generate single events, we need a way of mapping them to specific bots. We’ll define a new function, <code>genEventPair</code>, to generate <em>two</em> events at once, corresponding to the player and the enemy in the game.</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">genEventPair ::</span> <span class="dt">StateT</span> <span class="dt">BotState</span> <span class="dt">IO</span> (<span class="dt">Event</span>, <span class="dt">Event</span>)
-genEventPair <span class="fu">=</span> <span class="kw">do</span>
-    p <span class="ot">&lt;-</span> use player
-    e <span class="ot">&lt;-</span> use enemy
-    zoom generator <span class="fu">$</span> liftM2 switchDmgs (genEvent p) (genEvent e)
-  <span class="kw">where</span>
-    switchDmgs (a, b, c) (d, e, f) <span class="fu">=</span> ( (d, b, c), (a, e, f) )</code></pre>
-<p>There are a couple of new things at play here. First, on <code>use</code>:</p>
-<p>Note the use of our <code>Lens</code>es <code>player</code> and <code>enemy</code>. To access the underlying state in a <code>StateT</code>, we typically call the function <code>lift</code>. Here instead we call the function <code>use</code> from <code>Lens.Family2.State</code>, which allows us to specify which <em>piece</em> of our <code>BotState</code> we want to get. We do just this in order to generate events for both the <code>player</code> and <code>enemy</code>, using the aforementioned <code>Lens</code>es.</p>
-<p>Next, if you were looking closely you might have noticed that <code>genEvent</code> isn’t operating in the same monad as <code>genEventPair</code>, yet we use <code>genEvent</code> inside of <code>genEventPair</code>! We are able do do this using the <code>zoom</code> combinator.</p>
-<p><code>zoom</code> lifts a stateful operation on one field to a stateful operation on the entire state. Here, we’re zooming into <code>generator</code> (a <code>Lens</code> on our <code>StdGen</code>) and lifting the (stateful) generation of events for both the player and enemy into a (stateful) generation of <em>two</em> events while preserving player and enemy states. The fact that we can <code>zoom</code> into <code>genEvent</code> helps out the declaration immensely. It removes a lot of plumbing that we would have had to deal with in order to have <code>genEvent</code> operate on an underlying state of type <code>BotState</code> and allows the type of the computation to be more explicit.</p>
-<p>Finally, Note the use of <code>switchDmgs</code> here: This was an ad hoc way to switch around damage dealt and damage sustained. <code>genEventPair</code> produces events harboring damage <em>taken</em>, which is what we need in order to process them in a nice way.</p>
-<h4 id="processing-events">Processing Events</h4>
-<p>Now that we’re able to generate events and keep track of our game state, the next thing we need to do is actually process these events and update game state. We introduce <code>resolveEvent</code> to take care of this:</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">resolveEvent ::</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span> (<span class="dt">Event</span>, <span class="dt">Event</span>) <span class="ot">-&gt;</span> <span class="dt">StateT</span> <span class="dt">BotState</span> m [(<span class="dt">Bot</span>, <span class="dt">Event</span>)]
-resolveEvent (p_evt, e_evt) <span class="fu">=</span> <span class="kw">do</span>
-    zoom player (resolve p_evt)
-    zoom enemy  (resolve e_evt)
-    p <span class="ot">&lt;-</span> use player
-    e <span class="ot">&lt;-</span> use enemy
-    return [(p, p_evt), (e, e_evt)]
-
-<span class="ot">resolve ::</span> (<span class="dt">Monad</span> m) <span class="ot">=&gt;</span> <span class="dt">Event</span> <span class="ot">-&gt;</span> <span class="dt">StateT</span> <span class="dt">Bot</span> m ()
-resolve (dmg, ddg, blk)
-    <span class="fu">|</span> ddg       <span class="fu">=</span> return ()
-    <span class="fu">|</span> blk       <span class="fu">=</span> hp <span class="fu">-=</span> dmg <span class="ot">`div`</span> <span class="dv">2</span>
-    <span class="fu">|</span> otherwise <span class="fu">=</span> hp <span class="fu">-=</span> dmg</code></pre>
-<p>First let’s look at the <code>resolve</code> function. Here we are taking an event and updating a <code>Bot</code>’s state based on that event. The implementation is straightforward, especially given that we have the <code>-=</code> <code>Lens</code> combinator at our disposal – this allows us to write imperative-looking code that does exactly what you would expect it to.</p>
-<p>In the <code>resolveEvent</code> function, you should see some similarities to the above section. We can again use <code>zoom</code> and <code>use</code> in order to lift computations and retrieve state just as before, but we’re updating the main game state now. We produce two 2-tuples containing modified bots and their attached event that was processed during each turn.</p>
-<p>At this point, the game logic is actually finished. We have ways to produce and deal with game events that modify game state, and provided that we can actually link these functions together (which we can, as we’ll see later), the game will actually run. All that we need to do now is handle IO and bot death. This is where <code>Pipes</code> comes in.</p>
-<h4 id="pipes-and-io">Pipes and IO</h4>
-<p>Let’s get the boring stuff out of the way first. I mentioned above that we have yet to deal with two major components of our game: IO and bot death. Let’s first define some simple functions to deal with these:</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">dead ::</span> <span class="dt">Bot</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span>
-dead <span class="fu">=</span> (<span class="fu">&lt;=</span> <span class="dv">0</span>) <span class="fu">.</span> view hp
-
-<span class="ot">printBot ::</span> <span class="dt">Bot</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> ()
-printBot bot <span class="fu">=</span> putStrLn <span class="fu">$</span> bot<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; has &quot;</span> <span class="fu">++</span> show (bot<span class="fu">^.</span>hp) <span class="fu">++</span> <span class="st">&quot; hp remaining.&quot;</span>
-
-<span class="ot">printEvent ::</span> <span class="dt">Bot</span> <span class="ot">-&gt;</span> <span class="dt">Event</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> ()
-printEvent bot (_, <span class="dt">True</span>, _) <span class="fu">=</span> putStrLn <span class="fu">$</span>
-  bot<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; dodges the attack and takes no damage!&quot;</span>
-printEvent bot (d, _, <span class="dt">True</span>) <span class="fu">=</span> putStrLn <span class="fu">$</span> 
-  bot<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; blocks and takes half (&quot;</span> <span class="fu">++</span> show (d <span class="ot">`div`</span> <span class="dv">2</span>) <span class="fu">++</span> <span class="st">&quot;) damage!&quot;</span>
-printEvent bot (d, _,    _) <span class="fu">=</span> putStrLn <span class="fu">$</span> 
-  bot<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; takes &quot;</span> <span class="fu">++</span> show d <span class="fu">++</span> <span class="st">&quot; damage.&quot;</span></code></pre>
-<p>Here we again make use of our <code>Lens</code>es (these are handy, huh?). We use the <code>view</code> function in order to get the health of our bot in <code>dead</code>, and check whether its hp is less than 0 in the usual fashion. <code>view</code> is just a prefix synonym for the infix <code>^.</code> that we’ve been using all this time. Speaking of which, we use the <code>^.</code> combinator heavily in both <code>printEvent</code> and <code>printBot</code> to handle the string-handling plumbing. Since these functions essentially tell you what they’re doing implicitly, I’ll omit an extensive explanation.</p>
-<p>Now that we have ways to print <code>Bot</code>s and <code>Event</code>s and check for bot death, the last thing we need to do is actually perform these things the context of our game. A <code>Consumer</code> from the <code>Pipes</code> library will handle this nicely for us:</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">printGame ::</span> <span class="dt">Consumer</span> [(<span class="dt">Bot</span>, <span class="dt">Event</span>)] (<span class="dt">StateT</span> <span class="dt">BotState</span> <span class="dt">IO</span>) ()
-printGame <span class="fu">=</span> <span class="kw">do</span>
-    botEvents<span class="fu">@</span>[(b1, e1), (b2, e2)] <span class="ot">&lt;-</span> await
-    (lift <span class="fu">.</span> lift) <span class="fu">$</span> <span class="kw">do</span>
-        forM_ botEvents <span class="fu">$</span> \be<span class="fu">@</span>(bot, event) <span class="ot">-&gt;</span> <span class="kw">do</span>
-            uncurry printEvent be
-            printBot bot
-            threadDelay <span class="dv">500000</span>
-            when (dead bot) <span class="fu">$</span> putStrLn <span class="fu">$</span> bot<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; died!&quot;</span>
-        putStrLn <span class="fu">$</span> <span class="kw">case</span> (dead b1, dead b2) <span class="kw">of</span>
-            (<span class="dt">True</span> , <span class="dt">True</span> ) <span class="ot">-&gt;</span> <span class="st">&quot;It was a tie!&quot;</span>
-            (<span class="dt">True</span> , <span class="dt">False</span>) <span class="ot">-&gt;</span> b2<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; wins!&quot;</span>
-            (<span class="dt">False</span>, <span class="dt">True</span> ) <span class="ot">-&gt;</span> b1<span class="fu">^.</span>name <span class="fu">++</span> <span class="st">&quot; wins!&quot;</span>
-            _              <span class="ot">-&gt;</span> <span class="st">&quot;-----------------&quot;</span>
-    unless (any (dead <span class="fu">.</span> fst) botEvents) printGame</code></pre>
-<p>We <code>await</code> two <code>(Bot, Event)</code>s (from where, you might ask? We’ll see in a moment.) and essentially handle all of the plumbing here. For each pair of bots and events, we print the event, print the bot, then wait half a second with <code>threadDelay</code> (otherwise the game would run too quickly and we wouldn’t see it play out). With a <code>Consumer</code> like this, we need to loop until we’ve consumed all of the input we want, so we use the <code>when</code> and <code>unless</code> functions from <code>Control.Monad</code> as indicators of when to do so. If a bot dies, we stop – we also print out some information about who died and who won the game.</p>
-<h4 id="running-the-game">Running the Game</h4>
-<p>Okay, so I say that we have everything we need now, but you might ask…how do I run this? Let’s take a look at a program that pits two bots – a good guy and a bad guy – against one another, and we’ll dissect it.</p>
-<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">runGame ::</span> <span class="dt">IO</span> ()
-runGame <span class="fu">=</span> <span class="kw">do</span>
-    gen <span class="ot">&lt;-</span> R.getStdGen
-    <span class="kw">let</span> player <span class="fu">=</span> <span class="dt">Bot</span> <span class="st">&quot;The Good Guy&quot;</span> <span class="dv">19</span> <span class="dv">13</span> <span class="dv">12</span> <span class="dv">200</span>
-        enemy  <span class="fu">=</span> <span class="dt">Bot</span> <span class="st">&quot;The Bad Guy&quot;</span>  <span class="dv">14</span> <span class="dv">6</span>  <span class="dv">10</span> <span class="dv">200</span>
-        startState <span class="fu">=</span> (gen, (player, enemy))
-    flip evalStateT startState 
-      <span class="fu">$</span> runEffect 
-      <span class="fu">$</span> lift (genEventPair <span class="fu">&gt;&gt;=</span> resolveEvent) <span class="fu">&gt;~</span> printGame</code></pre>
-<p>In the first few lines, we simply set up an initial state for the game. The real “stuff” happens in the line starting with <code>flip evalStateT</code>. We’ll work through this at a type level from the inside-out. First, we perform <code>genEventPair &gt;&gt;= resolveEvent</code>, which effectively handles the logic we talked about earlier and produces a <code>StateT BotState IO [(Bot, Event)]</code>. From here, we <code>lift</code> the computation into an <code>Effect (StateT BotState IO) [(Bot, Event)]</code>, which we then repeatedly pipe into <code>printGame</code> with <code>&gt;~</code>. After all of this, we <code>runEffect</code> to extract the <code>StateT BotState IO [(Bot, Event)]</code> from the computation, and finally evaluate the function using <code>evalStateT</code>. Phew!</p>
-<p>In any case, we can now run our program and execute the game…</p>
-<pre class="sourceCode c"><code class="sourceCode c">*Main&gt; runGame
-The Good Guy takes <span class="dv">15</span> damage.
-The Good Guy has <span class="dv">285</span> hp remaining.
-The Bad Guy takes <span class="dv">29</span> damage.
-The Bad Guy has <span class="dv">171</span> hp remaining.
------------------
-The Good Guy dodges the attack and takes no damage!
-The Good Guy has <span class="dv">285</span> hp remaining.
-The Bad Guy takes <span class="dv">20</span> damage.
-The Bad Guy has <span class="dv">151</span> hp remaining.
------------------
-The Good Guy blocks and takes half (<span class="dv">24</span>) damage!
-The Good Guy has <span class="dv">261</span> hp remaining.
-The Bad Guy takes <span class="dv">34</span> damage.
-The Bad Guy has <span class="dv">117</span> hp remaining.
------------------
-The Good Guy takes <span class="dv">46</span> damage.
-The Good Guy has <span class="dv">215</span> hp remaining.
-The Bad Guy takes <span class="dv">19</span> damage.
-The Bad Guy has <span class="dv">98</span> hp remaining.
------------------
-The Good Guy takes <span class="dv">32</span> damage.
-The Good Guy has <span class="dv">183</span> hp remaining.
-The Bad Guy takes <span class="dv">37</span> damage.
-The Bad Guy has <span class="dv">61</span> hp remaining.
------------------
-The Good Guy dodges the attack and takes no damage!
-The Good Guy has <span class="dv">183</span> hp remaining.
-The Bad Guy takes <span class="dv">12</span> damage.
-The Bad Guy has <span class="dv">49</span> hp remaining.
------------------
-The Good Guy takes <span class="dv">24</span> damage.
-The Good Guy has <span class="dv">159</span> hp remaining.
-The Bad Guy takes <span class="dv">23</span> damage.
-The Bad Guy has <span class="dv">26</span> hp remaining.
------------------
-The Good Guy dodges the attack and takes no damage!
-The Good Guy has <span class="dv">159</span> hp remaining.
-The Bad Guy takes <span class="dv">36</span> damage.
-The Bad Guy has -<span class="dv">10</span> hp remaining.
-The Bad Guy died!
-The Good Guy wins!</code></pre>
-<p>…and behold, the good guy wins (this time)!</p>
-<p><a href="https://gist.github.com/5outh/8049361">View full source on GitHub</a>.</p>
-<p>- Ben</p>
-</div>
-
-	    	<a class="disqus_link" href="./posts/2013-12-19-bots4-clone.html#disqus_thread"></a>
     	</li>
     
 </ul></p>
