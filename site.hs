@@ -81,23 +81,27 @@ main = hakyll $ do
 
     match "posts/*"  postHandler
     match "drafts/*" postHandler
+    match "notes/*" postHandler
     match "projects/*" $ do
       route $ setExtension "html"
       compile (pandocCompiler >>= relativizeUrls)
 
     {- List all post headers -}
-    create [ "archive.html" ] $ do
-      route idRoute
-      compile $ do
-          posts <- recentFirst =<< loadAll "posts/*"
-          let archiveCtx =
-                  listField  "posts" postCtx' (return posts)  <>
-                  constField "title" "All Posts"              <>
-                  defaultContext
-          makeItem ""
-              >>= loadAndApplyTemplate "templates/archive.html" archiveCtx
-              >>= loadAndApplyTemplate "templates/default.html" archiveCtx
-              >>= relativizeUrls
+    let mkListOf pat = do
+          route idRoute
+          compile $ do
+              posts <- recentFirst =<< loadAll pat
+              let archiveCtx =
+                      listField  "posts" postCtx' (return posts)  <>
+                      constField "title" "All Posts"              <>
+                      defaultContext
+              makeItem ""
+                  >>= loadAndApplyTemplate "templates/archive.html" archiveCtx
+                  >>= loadAndApplyTemplate "templates/default.html" archiveCtx
+                  >>= relativizeUrls
+
+    create [ "archive.html" ] $ mkListOf "posts/*"
+    create [ "notes.html" ] $ mkListOf "notes/*"
 
     create [ "projects.html" ] $ do
       route idRoute
@@ -127,20 +131,20 @@ main = hakyll $ do
             >>= relativizeUrls
 
     {- Experimental -}
-    forM_ [0..10] $ \n -> do
-      let title = fromFilePath $ "posts-" <> show n <> ".html"
-      create [ title ] $ do
-        route idRoute
-        compile $ do
-          posts <- takeFrom (n * 5) 5 <$> (recentFirst =<< loadAllSnapshots "posts/*" "content")
-          let blogCtx =
-                listField  "posts"   postCtx' (return posts) <>
-                constField "title"   ("page " ++ show n)     <>
-                defaultContext
-          makeItem ""
-              >>= loadAndApplyTemplate "templates/post_snip.html" blogCtx
-              >>= loadAndApplyTemplate "templates/default.html"   blogCtx
-              >>= relativizeUrls
+    --forM_ [0..10] $ \n -> do
+      --let title = fromFilePath $ "posts-" <> show n <> ".html"
+      --create [ title ] $ do
+      --  route idRoute
+      --  compile $ do
+      --    posts <- takeFrom (n * 5) 5 <$> (recentFirst =<< loadAllSnapshots "posts/*" "content")
+      --    let blogCtx =
+      --          listField  "posts"   postCtx' (return posts) <>
+      --          constField "title"   ("page " ++ show n)     <>
+      --          defaultContext
+      --    makeItem ""
+      --        >>= loadAndApplyTemplate "templates/post_snip.html" blogCtx
+      --        >>= loadAndApplyTemplate "templates/default.html"   blogCtx
+      --        >>= relativizeUrls
 
     {- Make Atom/RSS Feeds -}
     let mkFeed render = do
