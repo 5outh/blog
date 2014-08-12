@@ -70,7 +70,7 @@ rep mempty == mempty
 It is also [split injective](http://en.wikipedia.org/wiki/Section_(category_theory)) with [splitting](http://en.wikipedia.org/wiki/Monomorphism):
 
 ```haskell
-abs :: Mnoid m => Endo m => m
+abs :: Monoid m => Endo m => m
 abs (Endo f) = f mempty
 ```
 
