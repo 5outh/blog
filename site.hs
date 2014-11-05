@@ -16,8 +16,8 @@ import           Control.Monad
 
 main :: IO ()
 main = hakyll $ do
-    {- Build Tags (unused for now, but handy) -}
-    tags <- buildTags "posts/*" (fromCapture "tags/*.html")
+    {- Build Tags -}
+    tags <- buildTags ("posts/*" .||. "notes/*") (fromCapture "tags/*.html")
     
     {- Simple alias -}
     let postCtx' = postCtx tags
@@ -63,7 +63,7 @@ main = hakyll $ do
     match "cv.markdown" static
     match "bang.md" static
 
-    match (fromList ["4Space.html", "What-the-Haskell.pdf", "wth.html"]) $ do
+    match (fromList ["4Space.html", "What-the-Haskell.pdf", "wth.html", "fgp.html"]) $ do
       route idRoute
       compile copyFileCompiler
 
@@ -81,7 +81,8 @@ main = hakyll $ do
 
     match "posts/*"  postHandler
     match "drafts/*" postHandler
-    match "notes/*" postHandler
+    match "notes/*"  postHandler
+
     match "projects/*" $ do
       route $ setExtension "html"
       compile (pandocCompiler >>= relativizeUrls)

@@ -43,7 +43,7 @@ foldTree :: (a -> b -> b) -> b -> BST a -> b
 foldTree f b Empty = b
 foldTree f b (Tree left a right) = foldTree f ( f a (foldTree f b right) ) left
 
-toList :: Ord a => BST a -> [a]
+toList :: BST a -> [a]
 toList t = foldTree (:) [] t
 ```
 

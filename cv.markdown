@@ -30,10 +30,12 @@ title: Resumé
 
 **Seller Labs**  
 Athens, GA  
-Backend Engineer Intern
+Backend Engineer Intern  
 April 2014 - Present
 
-- Wrote Node-MWS, a node.js based, highly scalable interface to Amazon MWS.
+- Wrote Node-MWS, a node.js based, scalable interface to Amazon MWS.
+- Implemented a RESTful API for interacting with company databases in order to simplify data access internally.
+- Designed a continuous repricing engine for Amazon items.
 
 **UGA College of Agricultural and Environmental Sciences**  
 Athens, GA  
@@ -60,9 +62,9 @@ June 2011 - January 2012 (6 months)
 **Personal Projects**  
 [https://github.com/5outh](https://github.com/5outh)  
 
-- Designed and implemented Bang, an EDSL for composing drum compositions in Haskell.
-- Constructed interpreters for two simple programming languages.  
-- Created "Wappansai," a PC dungeon crawling game, from the ground up.
+- Designed and implemented Bang, an embedded DSL for composing drum machine sequences.
+- Wrote Molecule, a small, statically, strongly typed programming language with type inference.
+- Constructed interpreters for three programming languages.
 
 ### Extra-curriculars
 
@@ -79,7 +81,7 @@ June 2011 - January 2012 (6 months)
 - C++
 
 ### Awards
-- Deans List, UGA (5 Semesters)
+- Deans List, UGA (6 Semesters)
 - 2014 John G. Hollingsworth Award
 
 ### Talks

@@ -280,6 +280,23 @@ footer {
   header ul {
     display:none;
   }
+
+  .social_links {
+    display:none;
+  }
+  .blog_list {
+    padding-left:0px;
+  }
+  .subtitle {
+    line-height: 14px !important;
+  }
+
+  pre>code {
+    font-size: 10px;
+  }
+  #blog_subtitle {
+    line-height: 14px !important;
+  }
 }
 
 @media print {
@@ -307,7 +324,6 @@ footer {
 
 .subtitle {
   line-height: 2px;
-  /*font-style: italic;*/
   font-weight: normal;
 }
 

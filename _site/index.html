@@ -487,7 +487,7 @@ fromList xs <span class="fu">=</span> foldr treeInsert <span class="dt">Empty</s
 foldTree f b <span class="dt">Empty</span> <span class="fu">=</span> b
 foldTree f b (<span class="dt">Tree</span> left a right) <span class="fu">=</span> foldTree f ( f a (foldTree f b right) ) left
 
-<span class="ot">toList ::</span> <span class="dt">Ord</span> a <span class="ot">=&gt;</span> <span class="dt">BST</span> a <span class="ot">-&gt;</span> [a]
+<span class="ot">toList ::</span> <span class="dt">BST</span> a <span class="ot">-&gt;</span> [a]
 toList t <span class="fu">=</span> foldTree (<span class="fu">:</span>) [] t</code></pre>
 <p><code>foldTree</code> is analogous to <code>foldr</code> (and would be a fine definition for <code>foldr</code> in a <code>Foldable</code> instance), and <code>toList</code> destructs (folds) a <code>BST a</code> into an <code>[a]</code>. Thinking this way, <code>toList</code> again defines a catamorphism, this time from <code>BST a -&gt; [a]</code>, denoted <span class="math">\(toList = (\!\left| : \right|\!)\)</span>. But we can also think of <code>toList</code> as unfolding a <code>BST a</code> into an <code>[a]</code>, so we can analogously define an anamorphism <span class="math">\(toList = [\!( : )\!]\)</span>.</p>
 <p>There’s something interesting about <code>toList</code>: <code>foldTree</code> traverses a <code>BST</code> in order, so it actually produces a sorted list (given that elements are <code>insert</code>ed rather than randomly placed!). Now we have a way to construct a binary search tree from a list of elements, and destruct a binary search tree into a sorted list of elements. This gives rise to a simple definion of a sorting algorithm, namely:</p>
